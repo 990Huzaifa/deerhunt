@@ -4,12 +4,10 @@ namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\SetPostLocationJob;
-use App\Mail\OTPMail;
 use App\Models\PasswordResetToken;
 use App\Services\AppStoreConnectAuth;
 use Auth;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -257,11 +255,15 @@ class AuthController extends Controller
 
             $user = User::where('email', $request->email)->first();
 
-            Mail::to($request->email)->send(new OTPMail([
-                'message' => 'Hi ' . $user->full_name . ', this is your one time password',
-                'otp' => $token,
-                'is_url' => false
-            ]));
+            myMailSend(
+                $user->email,
+                $user->full_name,
+                'Forgot Password Mail',
+                'Hi ' . $user->full_name . ', this is your one time password: ' . $token,
+                null,
+                $token
+            );
+
             return response()->json([
                 'message' => 'Reset OTP sent successfully',
             ], 200);
@@ -346,11 +348,14 @@ class AuthController extends Controller
                     'created_at' => now()
                 ]);
 
-            Mail::to($request->email)->send(new OTPMail([
-                'message' => 'Hi ' . $user->full_name . ', this is your one time password',
-                'otp' => $token,
-                'is_url' => false
-            ]));
+            myMailSend(
+                $user->email,
+                $user->full_name,
+                'Forgot Password Mail',
+                'Hi ' . $user->full_name . ', this is your one time password: ' . $token,
+                null,
+                $token
+            );
 
             return response()->json(['token' => $token], 200);
         } catch (QueryException $e) {

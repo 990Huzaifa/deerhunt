@@ -2,7 +2,6 @@
 
 use Illuminate\Http\Request;
 use App\Http\Controllers\BotController;
-use App\Http\Controllers\ServerController;
 use App\Http\Controllers\User\AuthController;
 use App\Http\Controllers\User\HeatMapController;
 use App\Http\Controllers\User\HomeController;
@@ -162,6 +161,3 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
 
 Route::post('cancel-sub',[PaymentController::class,'googleCancel']);
-
-
-Route::post('server-alert',[ServerController::class,'serverAlert']);
