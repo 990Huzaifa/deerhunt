@@ -37,7 +37,8 @@ return new class extends Migration
             $table->longText('highlight_photos')->nullable();
             $table->boolean('is_premium')->default(false);
             $table->boolean('is_bot')->default(false);
-
+            
+            $table->string('listen_from')->nullable();
             $table->timestamp('last_login_at')->nullable();
             $table->string('device_id')->nullable();
             $table->longText('app_version')->nullable();
