@@ -31,19 +31,10 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
-    'resend' => [
-        'key' => env('RESEND_API_KEY'),
-    ],
-
     'apple' => [
         'iap_shared_secret' => env('APPLE_IAP_SHARED_SECRET'),
         'issuer_id' => env('APPLE_APP_STORE_ISSUER_ID'),
         'key_id' => env('APPLE_APP_STORE_KEY_ID'),
-    ],
-
-    'brevo' => [
-        'api_key' => env('BREVO_API_KEY'),
-        'list_id' => env('BREVO_LIST_ID',3),
     ],
 
     'google' => [

@@ -7,7 +7,6 @@ use App\Jobs\SetPostLocationJob;
 use App\Mail\OTPMail;
 use App\Models\PasswordResetToken;
 use App\Services\AppStoreConnectAuth;
-use App\Services\BrevoService;
 use Auth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -18,22 +17,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use Illuminate\Database\QueryException;
-use Resend\Laravel\Facades\Resend;
 use Str;
 
 
 class AuthController extends Controller
 {
-    protected $brevoService;
-
-    // here constructor to call brevo service
-    public function __construct()
-    {
-        $this->brevoService = new BrevoService();
-    }
-
-
-
     public function signin(Request $request): JsonResponse
     {
         try{
@@ -61,8 +49,6 @@ class AuthController extends Controller
                 'device_id' => $request->device_id,
                 'app_version' => $request->app_version ?? null
             ]);
-
-            $this->brevoService->updateContact($user);
 
             return response()->json(['token' => $token,'user' => $user], 200);
         }catch(Exception $e){
@@ -118,9 +104,6 @@ class AuthController extends Controller
                 'free_credits' => 5,
             ]);
             // log entry of transaction for free credits
-
-            $BrevoService = new BrevoService();
-            $BrevoService->sendContact($user);
 
             DB::commit();
             return response()->json(["message" => "Account Register successfully"], 200);
@@ -184,9 +167,6 @@ class AuthController extends Controller
                     'paid_credits' => 0,
                     'free_credits' => 5,
                 ]);
-
-                $BrevoService = new BrevoService();
-                $BrevoService->sendContact($user);
             }
             $user->tokens()->delete();
             $token = $user->createToken('auth_token')->plainTextToken;
@@ -199,7 +179,6 @@ class AuthController extends Controller
                 'facebook_id' => $request->facebook_id ?? null,
                 'last_login_at' => now(),
             ]);
-            $this->brevoService->updateContact($user);
             DB::commit();
             return response()->json(['token' => $token,'user' => $user,'already_registered' => $already_registered], 200);
         }catch(QueryException $e){
@@ -239,7 +218,6 @@ class AuthController extends Controller
 
 
             $user->update(['last_login_at' => now(), 'fcm_token' => $fcm_token]);
-            $this->brevoService->updateContact($user);
             return response()->json(['token' => $token,'user' => $user], 200);
 
         }catch(Exception $e){
@@ -279,26 +257,11 @@ class AuthController extends Controller
 
             $user = User::where('email', $request->email)->first();
 
-            // $payload = [
-            // 'message' => 'Hi ' . $user->first_name . $user->last_name . 'This is your one time password',
-            //         'otp' => $token,
-            //         'is_url' => false
-            // ];
-            $htmlContent = "<p>Hi " . $user->first_name . $user->last_name . "This is your one time password</p><p>" . $token . "</p>";
-            $subject = 'Forgot Password Mail';
-            $brevo = new BrevoService();
-            $brevo->sendMail($subject, $user->email, $user->full_name, $htmlContent);
-            // Resend::emails()->send([
-            //     'to'=>$user->email,
-            //     'from'=>'onboarding@resend.dev',
-            //     'subject'=>'Forgot Password Mail',
-            //     'html'=>(new OTPMail($payload))->render(),		
-            // ]);
-        //    Mail::to($request->email)->send(new OTPMail([
-        //     'message' => 'Hi ' . $user->first_name . $user->last_name . 'This is your one time password',
-        //     'otp' => $token,
-        //     'is_url' => false
-        //    ]));
+            Mail::to($request->email)->send(new OTPMail([
+                'message' => 'Hi ' . $user->full_name . ', this is your one time password',
+                'otp' => $token,
+                'is_url' => false
+            ]));
             return response()->json([
                 'message' => 'Reset OTP sent successfully',
             ], 200);
@@ -383,27 +346,11 @@ class AuthController extends Controller
                     'created_at' => now()
                 ]);
 
-                //  $payload = [
-                //     'message' => 'Hi ' . $user->first_name . $user->last_name . 'This is your one time password',
-                //     'otp' => $token,
-                //     'is_url' => false
-                // ];
-                $htmlContent = "<p>Hi " . $user->first_name . $user->last_name . "This is your one time password</p><p>" . $token . "</p>";
-                $subject = 'Forgot Password Mail';
-                $brevo = new BrevoService();
-                $brevo->sendMail($subject, $user->email, $user->full_name, $htmlContent);
-            // Resend::emails()->send([
-            //     'to'=>$user->email,
-            //     'from'=>'onboarding@resend.dev',
-            //     'subject'=>'Forgot Password Mail',
-            //     'html'=>(new OTPMail($payload))->render(),		
-            // ]);
-                // Mail::to($request->email)->send(new OTPMail([
-                //     'message' => 'Hi, This is your one time password',
-                //     'otp' => $token
-                // ]));
-
-
+            Mail::to($request->email)->send(new OTPMail([
+                'message' => 'Hi ' . $user->full_name . ', this is your one time password',
+                'otp' => $token,
+                'is_url' => false
+            ]));
 
             return response()->json(['token' => $token], 200);
         } catch (QueryException $e) {

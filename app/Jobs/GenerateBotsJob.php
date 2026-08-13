@@ -79,20 +79,12 @@ class GenerateBotsJob implements ShouldQueue
         // 5. DB path
         $dbPath = 'user-avatar/' . $imageName;
 
-        // 6. Upload same image to DigitalOcean Spaces
-        uploadLocalImageToSpaces(
+        uploadLocalImageToPublic(
             $randomFile->getRealPath(),
             'user-avatar',
             $imageName
         );
 
-        // 7. Copy image to local public/user-avatar
-        // File::copy(
-        //     $randomFile->getRealPath(),
-        //     $destinationDir . '/' . $imageName
-        // );
-
-        // 8. Return path for database
         return $dbPath;
     }
 }

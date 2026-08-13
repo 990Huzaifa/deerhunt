@@ -117,7 +117,7 @@ class ProfileController extends Controller
                         if (file_exists(public_path($old))) {
                             // @unlink(public_path($old));
                         }
-                        deleteImageFromSpaces($old);
+                        deleteImageFromPublic($old);
                     }
                 }
             }
@@ -127,16 +127,12 @@ class ProfileController extends Controller
                 foreach ($request->file('highlight_photos') as $image) {
                         // upload to bucket before moving the uploaded temp file locally
 
-                    $uploadedImage = uploadImageToSpaces(
+                    $uploadedImage = uploadImageToPublic(
                         $image,
                         'highlight-photos',
                         'highlight-photos'
                     );
-                    $image_name = $uploadedImage['path']; // this is the path returned from the upload function, which includes the folder and filename
-
-                    // $image->move(public_path('highlight-photos'), $image_name);
-
-                    $newUploadedPhotos[] = $image_name;
+                    $newUploadedPhotos[] = $uploadedImage['path'];
                 }
             }
 
@@ -196,22 +192,17 @@ class ProfileController extends Controller
             if ($request->hasFile('avatar')) {
                 $image = $request->file('avatar');
 
-                // upload to bucket before moving the uploaded temp file locally
-                $uploadedImage = uploadImageToSpaces(
+                $uploadedImage = uploadImageToPublic(
                     $image,
                     'user-avatar',
                     'u-avatar'
                 );
 
-                if ($user->avatar && file_exists(public_path($user->avatar))) {
-                    // @unlink(public_path($user->avatar));
-
-                    deleteImageFromSpaces($user->avatar);
+                if ($user->avatar) {
+                    deleteImageFromPublic($user->avatar);
                 }
 
-                $image_name = $uploadedImage['path']; // this is the path returned from the upload function, which includes the folder and filename
-                // $image->move(public_path('user-avatar'), $image_name);
-                $avatar = $image_name;
+                $avatar = $uploadedImage['path'];
             }
             $user->update([
                 'avatar' => $avatar,

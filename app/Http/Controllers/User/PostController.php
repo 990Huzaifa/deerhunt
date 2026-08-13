@@ -636,34 +636,23 @@ class PostController extends Controller
             
             $image = null;
             if ($request->hasFile('image')) {
-                // for bucket 
-                $uploadedImage = uploadImageToSpaces(
+                $uploadedImage = uploadImageToPublic(
                     $request->file('image'),
                     'post-image',
                     'post-image'
                 );
-                
-                $image = $request->file('image');
-                $image_name = $uploadedImage['path'] ?? null;
-                $image->move(public_path('post-image'), $image_name);
-                $image = $image_name;
-
-                
-                // $image = $uploadedImage['path'] ?? null;
+                $image = $uploadedImage['path'];
             }
             // handle multiple image upload
             if($request->hasFile('images')){
                 $images = [];
                 foreach($request->file('images') as $img){
-                    $uploadedImage = uploadImageToSpaces(
+                    $uploadedImage = uploadImageToPublic(
                         $img,
                         'post-image',
                         'post-image'
                     );
-                    // $image_name = 'post-image' . time() .rand(1000, 999999) . '.' . $img->getClientOriginalExtension();
-                    $image_name = $uploadedImage['path'] ?? null;
-                    // $img->move(public_path('post-image'), $image_name);
-                    $images[] = $image_name;
+                    $images[] = $uploadedImage['path'];
                 }
                 $image = implode(',', $images);
             }
@@ -699,18 +688,12 @@ class PostController extends Controller
                 foreach($ref_data as $item){
                     $ref_image = null;
                     if (isset($item['image']) && $item['image']) {
-
-                        // for bucket 
-                        $ref_image = uploadImageToSpaces(
+                        $ref_image = uploadImageToPublic(
                             $item['image'],
                             'post-image',
                             'post-image'
                         );
-                        $ref_image_file = $item['image'];
-                        // $ref_image_name = 'post-image' . time() .rand(1000, 999999) . '.' . $ref_image_file->getClientOriginalExtension();
-                        $ref_image_name = $ref_image['path'] ?? null;
-                        $ref_image_file->move(public_path('post-image'), $ref_image_name);
-                        $ref_image = $ref_image_name;
+                        $ref_image = $ref_image['path'];
                     }
                     $allImagePaths = array_merge($allImagePaths, [$ref_image]);
                     Post::create([
@@ -785,18 +768,12 @@ class PostController extends Controller
                     $uploadedImages = $request->file('feed_images');
 
                     foreach ($uploadedImages as $image) {
-
-                        // for bucket 
-                        $uploadedImage = uploadImageToSpaces(
+                        $uploadedImage = uploadImageToPublic(
                             $image,
                             'post-image',
                             'post-image'
                         );
-                        
-                        // $image_name = 'post-image' . time() . rand(1000, 999999) . '.' . $image->getClientOriginalExtension();
-                        $image_name = $uploadedImage['path'] ?? null;
-                        $image->move(public_path('post-image'), $image_name);
-                        $paths[] = $image_name;  // only paths
+                        $paths[] = $uploadedImage['path'];
                     }
                     $images = implode(',', $paths);
 

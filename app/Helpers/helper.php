@@ -1,12 +1,10 @@
 <?php
 
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\File;
-use Illuminate\Filesystem\FilesystemAdapter;
 
-function uploadImageToSpaces(UploadedFile $file, string $folder, string $prefix): array
+function uploadImageToPublic(UploadedFile $file, string $folder, string $prefix): array
 {
     $extension = strtolower($file->getClientOriginalExtension());
 
@@ -15,65 +13,56 @@ function uploadImageToSpaces(UploadedFile $file, string $folder, string $prefix)
     }
 
     $fileName = $prefix . time() . Str::random(10) . '.' . $extension;
+    $folder = trim($folder, '/');
+    $directory = public_path($folder);
 
-    $path = trim($folder, '/') . '/' . $fileName;
+    if (!File::isDirectory($directory)) {
+        File::makeDirectory($directory, 0755, true);
+    }
 
-    /** @var FilesystemAdapter $disk */
-    $disk = Storage::disk('spaces');
+    $file->move($directory, $fileName);
 
-    $disk->put(
-        $path,
-        file_get_contents($file->getRealPath()),
-        [
-            'visibility' => 'public',
-            'ContentType' => $file->getMimeType(),
-        ]
-    );
+    $path = $folder . '/' . $fileName;
 
     return [
         'path' => $path,
-        'url' => $disk->url($path),
+        'url' => asset($path),
     ];
 }
 
-
-function deleteImageFromSpaces(?string $path): bool
+function deleteImageFromPublic(?string $path): bool
 {
     if (!$path) {
         return false;
     }
 
-    $disk = Storage::disk('spaces');
-    if (!$disk->exists($path)) {
+    $fullPath = public_path($path);
+
+    if (!File::exists($fullPath)) {
         return false;
     }
 
-    return $disk->delete($path);
+    return File::delete($fullPath);
 }
 
-
-function uploadLocalImageToSpaces(string $localFilePath, string $folder, string $fileName): array
+function uploadLocalImageToPublic(string $localFilePath, string $folder, string $fileName): array
 {
     if (!File::exists($localFilePath)) {
         throw new Exception('Local image file not found.');
     }
 
-    $path = trim($folder, '/') . '/' . $fileName;
+    $folder = trim($folder, '/');
+    $directory = public_path($folder);
 
-    /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
-    $disk = Storage::disk('spaces');
+    if (!File::isDirectory($directory)) {
+        File::makeDirectory($directory, 0755, true);
+    }
 
-    $disk->put(
-        $path,
-        File::get($localFilePath),
-        [
-            'visibility' => 'public',
-            'ContentType' => File::mimeType($localFilePath) ?: 'image/jpeg',
-        ]
-    );
+    $path = $folder . '/' . $fileName;
+    File::copy($localFilePath, public_path($path));
 
     return [
         'path' => $path,
-        'url' => $disk->url($path),
+        'url' => asset($path),
     ];
 }

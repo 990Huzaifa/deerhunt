@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\BrevoService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class ServerController extends Controller
 {
@@ -17,11 +17,20 @@ class ServerController extends Controller
         $ramUsage = $request->ram_usage;
 
         if( $diskUsage > $diskLimit || $ramUsage > $ramLimit ){
-            // send mail here
-            $brevoServise = new BrevoService();
-    
-            $brevoServise->sendServerAlertMail($diskUsage, $ramUsage);
+            $htmlContent = "
+                <h1>Server Alert</h1>
+                <p>The server has detected high resource usage:</p>
+                <ul>
+                    <li>Disk Usage: {$diskUsage}%</li>
+                    <li>RAM Usage: {$ramUsage}%</li>
+                </ul>
+                <p>Please take the necessary actions to investigate and resolve the issue.</p>
+            ";
 
+            Mail::html($htmlContent, function ($message) {
+                $message->to('racklineai@gmail.com', 'Admin')
+                    ->subject('Server Alert: High Resource Usage Detected');
+            });
         }
 
         return response()->json(['message' => 'Alert email sent if limits exceeded.'], 200);
