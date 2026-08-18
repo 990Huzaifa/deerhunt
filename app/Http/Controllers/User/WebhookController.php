@@ -14,7 +14,6 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
-use App\Models\CreditsWallet as Wallet;
 use App\Models\Subscription;
 use Carbon\Carbon;
 use Exception;

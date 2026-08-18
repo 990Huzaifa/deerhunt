@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Models\CreditsWallet;
 use App\Models\Premium;
 use App\Models\Subscription;
 use App\Models\User;
@@ -104,20 +103,12 @@ class ProcessGoogleNotification implements ShouldQueue
         // ============================
         
         $planConfig = [
-            'premium-monthly'      => ['duration' => 'monthly', "is_premium" => true],
-            'premium-yearly'       => ['duration' => 'yearly', "is_premium" => true],
-
-            'basic-credt-monthly'      => ['credits' => 10,  'type' => 'credits_monthly', 'duration' => 'monthly',"is_premium" => false],
-            'basic-credt-yearly'       => ['credits' => 10,  'type' => 'credits_annual',  'duration' => 'yearly',"is_premium" => false],
-            'unlimited-credt-monthly'  => ['credits' => 0,   'type' => 'unlimited',       'duration' => 'monthly',"is_premium" => false],
-            'unlimited-credt-yearly'   => ['credits' => 0,   'type' => 'unlimited',       'duration' => 'yearly',"is_premium" => false],
-            
-            'basic-cred-monthly'      => ['credits' => 10,  'type' => 'credits_monthly', 'duration' => 'monthly',"is_premium" => false],
-            'basic-cred-yearly'       => ['credits' => 10,  'type' => 'credits_annual',  'duration' => 'yearly',"is_premium" => false],
-            'unlimited-cred-monthly'  => ['credits' => 0,   'type' => 'unlimited',       'duration' => 'monthly',"is_premium" => false],
-            'unlimited-cred-yearly'   => ['credits' => 0,   'type' => 'unlimited',       'duration' => 'yearly',"is_premium" => false],
-
-
+            'premium-monthly'         => ['duration' => 'monthly', "is_premium" => true],
+            'premium-yearly'          => ['duration' => 'yearly', "is_premium" => true],
+            'unlimited-credt-monthly' => ['duration' => 'monthly', "is_premium" => false],
+            'unlimited-credt-yearly'  => ['duration' => 'yearly', "is_premium" => false],
+            'unlimited-cred-monthly'  => ['duration' => 'monthly', "is_premium" => false],
+            'unlimited-cred-yearly'   => ['duration' => 'yearly', "is_premium" => false],
         ];
 
         $plan = $planConfig[$productId] ?? null;
@@ -353,59 +344,33 @@ class ProcessGoogleNotification implements ShouldQueue
     }
 
     public function subscription($type, $data, $productId, $plan){
-        // credit based plan handling logic
-
         switch ((int)$type) {
-            case 4: // SUBSCRIPTION_PURCHASED (New subscription) insert new subscription but first check if already exists
+            case 4: // SUBSCRIPTION_PURCHASED
                 $existingSubscription = Subscription::where('user_id', $data['obfuscatedExternalAccountId'])
                     ->where('platform', 'google')
                     ->where('plan', $productId)
                     ->first();
                 if(!$existingSubscription && $plan){
-                    // Create new subscription
-                    $newSubscription = Subscription::create([
-                        'user_id'           => $data['obfuscatedExternalAccountId'],
-                        'plan'              => $productId,
-                        'credits_per_month' => $plan['credits'],
-                        'released_credits'  => ($plan['type'] === 'credits_annual' ? 10 : 0),
-                        'total_credits'     => ($plan['type'] === 'credits_annual' ? 120 : 0),
-                        'starts_at'         => $data['start'],
-                        'expires_at'        => $data['expiry'],
-                        'renewal_period'    => $plan['duration'],
-                        'last_released_at'  => ($plan['type'] === 'credits_annual' ? Carbon::now() : null),
-                        'platform'          => 'google',
-                        'status'            => 'active',
+                    Subscription::create([
+                        'user_id'        => $data['obfuscatedExternalAccountId'],
+                        'plan'           => $productId,
+                        'starts_at'      => $data['start'],
+                        'expires_at'     => $data['expiry'],
+                        'renewal_period' => $plan['duration'],
+                        'platform'       => 'google',
+                        'status'         => 'active',
                     ]);
-
-                    $wallet = CreditsWallet::where('user_id', $newSubscription->user_id)->first();
-                    if($wallet){
-                        $wallet->paid_credits = $plan['credits'];
-                        $wallet->unlimited_active = $plan['type'] === 'unlimited' ? true : false;
-                        $wallet->save();    
-                    }
                 }
                 break;
             case 2: // SUBSCRIPTION_RENEWED
                 $subscription = Subscription::where('user_id', $data['obfuscatedExternalAccountId'])->where('platform', 'google')->first();
                 if($subscription){
                     $subscription->update([
-                        'plan'              => $productId,
-                        'credits_per_month' => $plan['credits'],
-                        'released_credits'  => ($plan['type'] === 'credits_annual' ? 10 : 0),
-                        'total_credits'     => ($plan['type'] === 'credits_annual' ? 120 : 0),
-                        'expires_at'        => $data['expiry'],
-                        'renewal_period'    => $plan['duration'],
-                        'last_released_at'  =>($plan['type'] === 'credits_annual' ? Carbon::now() : null),
-                        'status'            => 'active',
-                        'canceled_at'      => null,
+                        'plan'        => $productId,
+                        'expires_at'  => $data['expiry'],
+                        'status'      => 'active',
+                        'canceled_at' => null,
                     ]);
-
-                    $wallet = CreditsWallet::where('user_id', $subscription->user_id)->first();
-                    if($wallet){
-                        $wallet->paid_credits = $plan['credits'];
-                        $wallet->unlimited_active = $plan['type'] === 'unlimited' ? true : false;
-                        $wallet->save();
-                    }
                 }
                 break;
             case 3: // SUBSCRIPTION_CANCELED
@@ -417,26 +382,13 @@ class ProcessGoogleNotification implements ShouldQueue
                 }
                 break;
             case 13: // SUBSCRIPTION_EXPIRED
-                $subscription = Subscription::where('user_id', $data['obfuscatedExternalAccountId'])->where('plan',$productId)->where('platform', 'google')->first();
+                $subscription = Subscription::where('user_id', $data['obfuscatedExternalAccountId'])->where('plan', $productId)->where('platform', 'google')->first();
                 if($subscription){
                     $subscription->update([
                         'status' => 'expired',
                     ]);
-
-                    // update wallet
-                    $wallet = CreditsWallet::where('user_id', $subscription->user_id)->first();
-                    if($plan['type'] === 'unlimited'){
-                        $wallet->update([
-                            'unlimited_active' => false
-                        ]);
-                    }else{
-                        $wallet->update([
-                            'paid_credits' => 0
-                        ]);
-                    }
                 }
                 break;
-            // ... include other types like RECOVERED, ON_HOLD, etc.
         }
     }
 }

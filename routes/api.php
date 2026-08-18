@@ -13,7 +13,6 @@ use App\Http\Controllers\User\PremiumController;
 use App\Http\Controllers\User\ProfileController;
 use App\Http\Controllers\User\ReportController;
 use App\Http\Controllers\User\TweetController;
-use App\Http\Controllers\User\WalletController;
 use App\Http\Controllers\User\WebhookController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AuthController as AdminAuth;
@@ -110,7 +109,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::apiResource('lead', LeadController::class)->only(['index', 'store', 'update']);
         Route::get('lead-show', [LeadController::class, 'show']);
 
-        Route::get('wallet', [WalletController::class, 'index']);
 
         Route::post('verify-payment', [PaymentController::class, 'verifyApple']);
         Route::post('google/verify-payment', [PaymentController::class, 'verifyGoogle']);

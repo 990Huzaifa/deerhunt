@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Models\CreditsWallet;
 use App\Models\Premium;
 use App\Models\Subscription;
 use App\Models\User;
@@ -48,13 +47,10 @@ class ProcessAppleNotificationV2 implements ShouldQueue
         // update logic here
 
         $planConfig = [
-                'premium_monthly'      => ['duration' => 'monthly', "is_premium" => true],
-                'premium_yearly'       => ['duration' => 'yearly', "is_premium" => true],
-
-                'basic_cred_monthly'      => ['credits' => 10,  'type' => 'credits_monthly', 'duration' => 'monthly', "is_premium" => false],
-                'basic_cred_yearly'       => ['credits' => 10,  'type' => 'credits_annual',  'duration' => 'yearly', "is_premium" => false],
-                'unlimited_cred_monthly'  => ['credits' => 0,   'type' => 'unlimited',       'duration' => 'monthly', "is_premium" => false],
-                'unlimited_cred_yearly'   => ['credits' => 0,   'type' => 'unlimited',       'duration' => 'yearly', "is_premium" => false],
+                'premium_monthly'         => ['duration' => 'monthly', "is_premium" => true],
+                'premium_yearly'          => ['duration' => 'yearly', "is_premium" => true],
+                'unlimited_cred_monthly'  => ['duration' => 'monthly', "is_premium" => false],
+                'unlimited_cred_yearly'   => ['duration' => 'yearly', "is_premium" => false],
             ];
 
         $productId = $decodedTransactionInfo['productId'];
@@ -78,24 +74,12 @@ class ProcessAppleNotificationV2 implements ShouldQueue
             $subscription = Subscription::where('transaction_id', $decodedTransactionInfo['originalTransactionId'])->where('platform', 'apple')->first();
             if($subscription){
                 $subscription->update([
-                    'plan'              => $productId,
-                    'credits_per_month' => $plan['credits'],
-                    'released_credits'  => ($plan['type'] === 'credits_annual' ? 10 : 0),
-                    'total_credits'     => ($plan['type'] === 'credits_annual' ? 120 : 0),
-                    'expires_at'        => $decodedTransactionInfo['expireDateFormatted'],
-                    'last_released_at'  =>($plan['type'] === 'credits_annual' ? Carbon::now() : null),
-                    'status'            => 'active',
-                    'canceled_at'      => null,
+                    'plan'       => $productId,
+                    'expires_at' => $decodedTransactionInfo['expireDateFormatted'],
+                    'status'     => 'active',
+                    'canceled_at' => null,
                 ]);
-
-
-                $wallet = CreditsWallet::where('user_id', $subscription->user_id)->first();
-                if($wallet){
-                    $wallet->paid_credits = $plan['credits'];
-                    $wallet->save();
-                }
             }
-            
         }
         elseif($notificationType == "EXPIRED"){
             $subscription = Subscription::where('transaction_id', $decodedTransactionInfo['originalTransactionId'])->first();
@@ -103,22 +87,7 @@ class ProcessAppleNotificationV2 implements ShouldQueue
                 $subscription->update([
                     'status' => 'expired',
                 ]);
-
-                // update wallet
-                $wallet = CreditsWallet::where('user_id', $subscription->user_id)->first();
-                $wallet->update([
-                    'paid_credits' => 0
-                ]);
-
-                // update wallet
-                if($plan['type'] === 'unlimited'){
-                    $wallet->update([
-                        'unlimited_active' => false
-                    ]);
-                }
-                // Log::error('App Store V2 Notification Job Done. subscription Expired.');
             }
-            // Log::error('App Store V2 Notification Job Done. Subscription not found.'); 
         }
         elseif($notificationType == "DID_CHANGE_RENEWAL_STATUS"){
             if($subtype && $subtype == "AUTO_RENEW_DISABLED"){
@@ -127,13 +96,8 @@ class ProcessAppleNotificationV2 implements ShouldQueue
                     $subscription->update([
                         'canceled_at' => Carbon::now(),
                     ]);
-                    
                 }
             }
-            
-        }
-        else{
-            // Log::error('App Store V2 Notification Job Done. Subscription not found.');
         }
     }
 

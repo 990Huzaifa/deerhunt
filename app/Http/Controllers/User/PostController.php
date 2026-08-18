@@ -172,24 +172,6 @@ class PostController extends Controller
             //     'image' => implode(',', $allImagePaths)
             // ]);
 
-            // deduct credits from wallet
-            $wallet = $user->wallet;
-            if(!$wallet) throw new Exception('Wallet not found',500);
-            $cost = 1; // cost per analysis
-            // deduct credits from wallet if deer_age_estimate is true
-            $cost += ($request->deer_age_estimate ?? false) ? 1 : 0;
-            // deduct credits from wallet if growth_projection is true
-            $cost += ($request->growth_projection ?? false) ? 1 : 0;
-
-            $deducted = $this->deductCredits($user, $cost);
-            if (!$deducted) {
-                // insufficient balance
-                // delete the post and its ref data
-                Post::where('id', $post->id)->orWhere('ref_id', $post->id)->delete();
-                $user->decrement('analysis_count');
-                throw new Exception('Insufficient balance. Please recharge your wallet.', 400);
-            }
-
             return response()->json($post);
 
         } catch (QueryException $e) {
@@ -444,39 +426,6 @@ class PostController extends Controller
         }
     }
 
-    private function deductCredits($user, $cost) {
-        // we have free credits and paid credits make sure free credits are used first
-        $wallet = $user->wallet;
-
-        if ($wallet && $wallet->unlimited_active === 1) {
-            return true;
-        }
-        $remainingCost = $cost;
-        if ($wallet->free_credits > 0) {
-            if ($wallet->free_credits >= $remainingCost) {
-                // Pure cost free se cover ho gayi
-                $wallet->free_credits -= $remainingCost;
-                $remainingCost = 0;
-            } else {
-                // Jitni free hai utni use karo, baki paid se lena hoga
-                $remainingCost -= $wallet->free_credits;
-                $wallet->free_credits = 0;
-            }
-        }
-        if ($remainingCost > 0) {
-            if ($wallet->paid_credits >= $remainingCost) {
-                $wallet->paid_credits -= $remainingCost;
-                $remainingCost = 0;
-            } else {
-                // Paid bhi kam hai -> Insufficient balance
-                return false;
-            }
-        }
-        $wallet->save();
-
-        return true;
-    }
-
     public function postComment(Request $request, string $id): JsonResponse
     {
         try{
@@ -711,26 +660,6 @@ class PostController extends Controller
             $post->update([
                 'image' => implode(',', $allImagePaths)
             ]);
-
-            // deduct credits from wallet
-            if($request->score && $request->analysis){
-                $wallet = $user->wallet;
-                if(!$wallet) throw new Exception('Wallet not found',500);
-                $cost = 1; // cost per analysis
-                // deduct credits from wallet if deer_age_estimate is true
-                $cost += ($request->deer_age_estimate ?? false) ? 1 : 0;
-                // deduct credits from wallet if growth_projection is true
-                $cost += ($request->growth_projection ?? false) ? 1 : 0;
-
-                $deducted = $this->deductCredits($user, $cost);
-                if (!$deducted) {
-                    // insufficient balance
-                    // delete the post and its ref data
-                    Post::where('id', $post->id)->orWhere('ref_id', $post->id)->delete();
-                    $user->decrement('analysis_count');
-                    throw new Exception('Insufficient balance. Please recharge your wallet.', 400);
-                }
-            }
 
             return response()->json($post);
 
@@ -1026,26 +955,6 @@ class PostController extends Controller
             $post->update([
                 'image' => implode(',', $allImagePaths)
             ]);
-
-            // deduct credits from wallet
-            if($request->score && $request->analysis){
-                $wallet = $user->wallet;
-                if(!$wallet) throw new Exception('Wallet not found',500);
-                $cost = 1; // cost per analysis
-                // deduct credits from wallet if deer_age_estimate is true
-                $cost += ($request->deer_age_estimate ?? false) ? 1 : 0;
-                // deduct credits from wallet if growth_projection is true
-                $cost += ($request->growth_projection ?? false) ? 1 : 0;
-
-                $deducted = $this->deductCredits($user, $cost);
-                if (!$deducted) {
-                    // insufficient balance
-                    // delete the post and its ref data
-                    Post::where('id', $post->id)->orWhere('ref_id', $post->id)->delete();
-                    $user->decrement('analysis_count');
-                    throw new Exception('Insufficient balance. Please recharge your wallet.', 400);
-                }
-            }
 
             return response()->json($post);
 

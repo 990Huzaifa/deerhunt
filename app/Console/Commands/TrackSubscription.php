@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\CreditsWallet;
 use Illuminate\Console\Command;
 use App\Models\Subscription;
 use Illuminate\Support\Facades\Log;
@@ -36,12 +35,6 @@ class TrackSubscription extends Command
                 $expiry_count++;
                 $subscription->status = 'expired';
                 $subscription->save();
-
-                // set wallet credit to zero
-                $wallet = CreditsWallet::where('user_id', $subscription->user_id)->first();
-                $wallet->paid_credits = 0;
-                $wallet->unlimited_active = 0;
-                $wallet->save();
 
                 // notify user by email
                 // $user = $subscription->user;

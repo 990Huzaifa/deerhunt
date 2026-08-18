@@ -96,13 +96,6 @@ class AuthController extends Controller
                 'state' => $request->state ?? null ,
                 'county' => $request->county ?? null,
             ]);
-            // create empty wallet for user
-            $user->wallet()->create([
-                'paid_credits' => 0,
-                'free_credits' => 5,
-            ]);
-            // log entry of transaction for free credits
-
             DB::commit();
             return response()->json(["message" => "Account Register successfully"], 200);
         }catch(QueryException $e){
@@ -158,12 +151,6 @@ class AuthController extends Controller
                     'apple_id' => $request->apple_id ?? null,
                     'facebook_id' => $request->facebook_id ?? null,
                     'fcm_token' => $request->fcm_token,
-                ]);
-
-                // create empty wallet for user
-                $user->wallet()->create([
-                    'paid_credits' => 0,
-                    'free_credits' => 5,
                 ]);
             }
             $user->tokens()->delete();

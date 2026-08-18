@@ -97,7 +97,6 @@ class PremiumController extends Controller
             if($caseData == 'upgrade'){
                 DB::transaction(function () use ($user, $plan, $productId, $verificationData) {
 
-                    // 🔹 Handle Credit-based Plans
                     $user->premium()->update([
                         'plan'              => $productId,
                         'platform'          => "google",
