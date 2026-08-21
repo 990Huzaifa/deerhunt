@@ -31,9 +31,12 @@ class PostController extends Controller
     }
 
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         try {
+            // search query
+            $search = $request->query('search');
+
             $user = Auth::user();
             $posts = Post::select('posts.*', 'users.full_name', 'users.avatar')
                 ->join('users', 'users.id', '=', 'posts.user_id')->orderBy('created_at', 'desc')
@@ -42,7 +45,9 @@ class PostController extends Controller
                 ->where('posts.is_private', true)
                 ->where('posts.is_delete', false)
                 ->where('ref_id', null)
-
+                ->where(function ($query) use ($search) {
+                    $query->where('posts.title', 'like', '%' . $search . '%');
+                })
                 ->paginate(200);
             return response()->json($posts);
         } catch (QueryException $e) {
@@ -825,139 +830,19 @@ class PostController extends Controller
         }
     }
 
-
-
-    public function storeV3(Request $request)
+    public function reScore(Request $request, $id): JsonResponse
     {
         try {
             $user = Auth::user();
-            dd($request->all()) ;
-            $validator = Validator::make($request->all(), [
-                'title' => 'nullable',
-                'image' => 'nullable|file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
-                'images' => 'nullable|array|min:1',
-                'images.*' => 'file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',   
-                'score' => 'nullable',
-                'analysis'=> 'nullable',
-                'ref_data' => 'nullable|array',
-                'ref_data.*.title' => 'nullable|string',
-                'ref_data.*.score' => 'required_with:ref_data|numeric',
-                'ref_data.*.analysis' => 'required_with:ref_data|string',
-                'ref_data.*.image' => 'required_with:ref_data|file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
-                'measurements' => 'nullable|array',
-                'antler_points' => 'nullable|array',
-                'deer_age_estimate' => 'nullable|boolean',
-                'growth_projection' => 'nullable|boolean',
-                'estimated_age' => 'required_if:deer_age_estimate,true|integer',
-                'is_public' => 'nullable|boolean',
-                'is_private' => 'nullable|boolean',
-
-                'caption' => 'nullable',
-                'harvest_type' => 'nullable|string',
-                'state' => 'nullable|string',
-                'county' => 'nullable|string',
-            ], [
-                'image.required' => 'Image is required',
-                'image.uploaded' => 'Image must be uploaded',
-                'image.file' => 'Image must be a file',
-                'image.image' => 'Image must be an image',
-                'image.mimes' => 'Image must be a jpeg, png, jpg, gif, or svg',
-                'images.array' => 'Images must be an array',
-                'images.min' => 'At least one image is required',
-                'images.*.image' => 'Each image must be an image',
-                'images.*.mimes' => 'Each image must be a jpeg, png, jpg, gif, or svg',
-                'score.required' => 'Score is required',
-                'analysis.required' => 'Analysis is required',
-                'ref_data.array' => 'Reference data must be an array',
-                'ref_data.*.score.required_with' => 'Score is required for reference data',
-                'ref_data.*.score.numeric' => 'Score must be a number for reference data',
-                'ref_data.*.analysis.required_with' => 'Analysis is required for reference data',    
-                'ref_data.*.image.required_with' => 'Image is required for reference data',
-                'ref_data.*.image.image' => 'Image must be an image for reference data',
-                'ref_data.*.image.mimes' => 'Image must be a jpeg, png, jpg, gif, or svg for reference data',
-                'measurements.array' => 'Measurements must be an array',
-                'antler_points.array' => 'Antler points must be an array',
-                'deer_age_estimate.boolean' => 'Deer age estimate must be true or false',
-                'growth_projection.boolean' => 'Growth projection must be true or false',
-                'estimated_age.required_if' => 'Estimated age is required when deer age estimate is true',
-                'estimated_age.integer' => 'Estimated age must be an integer',
-            ]);
-
-            if ($validator->fails()) throw new Exception($validator->errors()->first(),400);
+            $post = Post::find($id);
             
-            $image = null;
-            if ($request->hasFile('image')) {
-                $image = $request->file('image');
-                $image_name = 'post-image' . time()  .rand(1000, 999999). '.' . $image->getClientOriginalExtension();
-                $image->move(public_path('post-image'), $image_name);
-                $image = 'post-image/' . $image_name;
-            }
-            // handle multiple image upload
-            if($request->hasFile('images')){
-                $images = [];
-                foreach($request->file('images') as $img){
-                    $image_name = 'post-image' . time() .rand(1000, 999999) . '.' . $img->getClientOriginalExtension();
-                    $img->move(public_path('post-image'), $image_name);
-                    $images[] = 'post-image/' . $image_name;
-                }
-                $image = implode(',', $images);
-            }
-            // merge image with ref data images
-            $allImagePaths = [$image];
-            $is_trophy = $request->caption ? true : false;
-            $post = Post::create([
-                'user_id' => $user->id,
-                'title' => $request->title ?? null,
-                'image' => $image,
-                'score' => $request->score ?? null,
-                'analysis' => $request->analysis ?? null,
-                'measurements' => json_encode($request->measurements) ?? null,
-                'antler_points' => json_encode($request->antler_points) ?? null,
-                'deer_age_estimate' => $request->deer_age_estimate ?? false,
-                'growth_projection' => $request->growth_projection ?? false,
-                'estimated_age' => $request->estimated_age ?? null,
-                'years_age' => json_encode($request->years_age) ?? null,
-                'is_public' => $request->is_public ?? false,
-                'is_private' => $request->is_private ?? false,
-                'caption' => $request->caption ?? null,
-                'state' => $request->state ?? $user->state,
-                'county' => $request->county ?? $user->county,
-                'harvest_type' => $request->harvest_type ?? null,
-                'is_trophy' => $is_trophy,
-            ]);
-            // increment analysis count in users table
-            $user->increment('analysis_count');
+            // call storeV2 function with the post data
+            $newPost = $this->storeV2($request);
 
-            // store ref data with ref_id = post id
-            if(isset($request->ref_data)){
-                $ref_data = $request->ref_data;
-                foreach($ref_data as $item){
-                    $ref_image = null;
-                    if (isset($item['image']) && $item['image']) {
-                        $ref_image_file = $item['image'];
-                        $ref_image_name = 'post-image' . time() .rand(1000, 999999) . '.' . $ref_image_file->getClientOriginalExtension();
-                        $ref_image_file->move(public_path('post-image'), $ref_image_name);
-                        $ref_image = 'post-image/' . $ref_image_name;
-                    }
-                    $allImagePaths = array_merge($allImagePaths, [$ref_image]);
-                    Post::create([
-                        'user_id' => $user->id,
-                        'title' => $item['title'] ?? null,
-                        'image' => $ref_image,
-                        'score' => $item['score'],
-                        'analysis' => $item['analysis'],
-                        'ref_id' => $post->id
-                    ]);
-                }
-            }
+            // update the post with the new post id
+            $post->update(['linked_post_id' => $newPost->id]);
 
-            // here we update post images with all image paths by imploding them with comma
-            $post->update([
-                'image' => implode(',', $allImagePaths)
-            ]);
-
-            return response()->json($post);
-
+            return response()->json(['message' => 'Post re-scored successfully', 'post' => $post], 200);
         } catch (QueryException $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         } catch (Exception $e) {
