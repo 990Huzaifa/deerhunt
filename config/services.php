@@ -45,4 +45,12 @@ return [
         'key' => env('OPENAI_API_KEY'),
     ],
 
+    'mail_service' => [
+        'url' => env('MAIL_SERVICE_URL'),
+        'api_key' => env('MAIL_API_KEY'),
+        'master_user' => env('MAIL_SERVICE_MASTER_USER'),
+        'timeout' => env('MAIL_SERVICE_TIMEOUT', 20),
+    ],
+
 ];
+

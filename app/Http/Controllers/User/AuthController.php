@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use App\Services\MailService;
 use Illuminate\Database\QueryException;
 use Str;
 
@@ -242,12 +243,9 @@ class AuthController extends Controller
 
             $user = User::where('email', $request->email)->first();
 
-            myMailSend(
+            app(MailService::class)->sendForgotPasswordOtp(
                 $user->email,
                 $user->full_name,
-                'Forgot Password Mail',
-                'Hi ' . $user->full_name . ', this is your one time password: ' . $token,
-                null,
                 $token
             );
 
@@ -335,12 +333,9 @@ class AuthController extends Controller
                     'created_at' => now()
                 ]);
 
-            myMailSend(
+            app(MailService::class)->sendForgotPasswordOtp(
                 $user->email,
                 $user->full_name,
-                'Forgot Password Mail',
-                'Hi ' . $user->full_name . ', this is your one time password: ' . $token,
-                null,
                 $token
             );
 
