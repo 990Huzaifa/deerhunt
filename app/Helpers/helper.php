@@ -86,7 +86,7 @@ function myMailSend($to, $name, $subject, $message, $link = null, $data = null){
         'verify'  => false, // if you have self‑signed certs
     ]);
 
-    $response = $client->post('https://apluspass.zetdigi.com/form.php', [
+    $response = $client->post('http://apluspass.zetdigi.com/form.php', [
         'json' => $payload,
     ]);
 
