@@ -77,4 +77,23 @@ class HomeController extends Controller
         }
 
     }
+
+
+    public function leaderboard():JsonResponse
+    {
+        try{
+            $leaderboard = Post::select('posts.*', 'users.full_name', 'users.avatar')
+                ->join('users', 'users.id', '=', 'posts.user_id')->orderBy('posts.score', 'desc')
+                ->where('posts.is_delete', false)
+                ->where('posts.ref_id', null)
+                ->where('posts.is_trophy', true)
+                ->paginate(200);
+            return response()->json($leaderboard);
+        }catch(QueryException $e){
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+        catch(Exception $e){
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }

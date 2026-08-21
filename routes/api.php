@@ -65,6 +65,8 @@ Route::prefix('admin')->group(function () {
     Route::post('signin', [AdminAuth::class, 'signin'])->name('admin.signin');
 });
 
+Route::get('leaderboard', [HomeController::class, 'leaderboard']);
+
 Route::middleware(['auth:sanctum'])->group(function () {
 
         Route::post('get-location', [AuthController::class,'location']);
