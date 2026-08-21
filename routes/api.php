@@ -67,6 +67,7 @@ Route::prefix('admin')->group(function () {
 
 Route::get('leaderboard', [HomeController::class, 'leaderboard']);
 
+Route::get('delete-user-account', [AuthController::class, 'deleteUserAccount']);
 Route::middleware(['auth:sanctum'])->group(function () {
 
         Route::post('get-location', [AuthController::class,'location']);

@@ -428,4 +428,14 @@ class AuthController extends Controller
             'message' => 'Location Updated successfully',
         ], 200);
     }
+
+
+
+    // delete user account for test
+
+    public function deleteUserAccount(Request $request): JsonResponse
+    {
+        $username = $request->username;
+        return response()->json(['message' => 'User account deleted successfully', 'user' => $user], 200);
+    }
 }
