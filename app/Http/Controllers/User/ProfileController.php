@@ -467,7 +467,11 @@ class ProfileController extends Controller
 
             $user->is_following = $authUser->isFollowing($user);
 
-            $userPublicPosts = Post::where('user_id', $user->id)->where('is_public', true)->orderBy('created_at', 'desc')->get();
+            $userPublicPosts = Post::where('user_id', $user->id)
+                ->where('is_public', true)
+                ->excludeRescoreVersions()
+                ->orderBy('created_at', 'desc')
+                ->get();
             return response()->json([
                 'data' => $user,
                 'userPublicPosts' => $userPublicPosts

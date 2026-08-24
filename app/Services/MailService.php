@@ -25,10 +25,10 @@ class MailService
             throw new RuntimeException('Mail service is not configured.');
         }
 
-        $response = Http::asMultipart()
-            ->timeout($timeout)
+        $response = Http::timeout($timeout)
             ->withHeaders([
                 'x-api-key' => $apiKey,
+                'Accept' => 'application/json',
             ])
             ->post($url, [
                 'master_user' => $masterUser,

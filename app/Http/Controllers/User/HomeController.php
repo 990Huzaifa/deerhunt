@@ -19,9 +19,9 @@ class HomeController extends Controller
         try{
             $user = Auth::user();
 
-            $topScore = Post::where('user_id', $user->id)->where('is_trophy', true)->where('ref_id', null)->where('is_delete', false)->orderBy('score', 'desc')->value('score');
+            $topScore = Post::where('user_id', $user->id)->where('is_trophy', true)->where('ref_id', null)->where('is_delete', false)->excludeRescoreVersions()->orderBy('score', 'desc')->value('score');
             $shared = PostShare::where('user_id', $user->id)->count();
-            $trophyRoom = Post::where('user_id', $user->id)->where('is_trophy', true)->where('ref_id', null)->where('is_delete', false)->count();
+            $trophyRoom = Post::where('user_id', $user->id)->where('is_trophy', true)->where('ref_id', null)->where('is_delete', false)->excludeRescoreVersions()->count();
 
             $data = [
                 'TopScore' => $topScore ?? 0,
@@ -34,6 +34,7 @@ class HomeController extends Controller
                 ->where('ref_id', null)
                 ->where('is_delete', false)
                 ->where('is_public', false)
+                ->excludeRescoreVersions()
                 ->take(5)
                 ->get();
 
@@ -41,6 +42,7 @@ class HomeController extends Controller
                 ->where('ref_id', null)
                 ->where('is_delete', false)
                 ->where('is_public', true)
+                ->excludeRescoreVersions()
                 ->take(5)
                 ->get();
 
@@ -67,6 +69,7 @@ class HomeController extends Controller
                 ->where('posts.is_delete', false)
                 ->where('posts.ref_id', null)
                 ->where('posts.is_public', false)
+                ->excludeRescoreVersions()
                 ->paginate(200);
             return response()->json($posts);
         }catch(QueryException $e){
@@ -87,6 +90,7 @@ class HomeController extends Controller
                 ->where('posts.is_delete', false)
                 ->where('posts.ref_id', null)
                 ->where('posts.is_trophy', true)
+                ->excludeRescoreVersions()
                 ->paginate(200);
             return response()->json($leaderboard);
         }catch(QueryException $e){

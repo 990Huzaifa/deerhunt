@@ -43,6 +43,7 @@ class HeatMapController extends Controller
                     ->join('users', 'users.id', '=', 'posts.user_id')
                     ->where('posts.is_delete', false)
                     ->whereNull('posts.ref_id')
+                    ->excludeRescoreVersions()
                     ->where('posts.county', $county)
                     ->where('posts.state', $state);
                     if($is_public == 1){

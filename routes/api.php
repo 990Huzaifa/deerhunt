@@ -82,6 +82,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('community',[PostController::class,'communityPosts']);
         Route::get('trophy-list',[PostController::class,'trophyList']);
         Route::post('v2/post',[PostController::class,'storeV2']);
+
+        Route::post('re-score-post/{id}',[PostController::class,'reScore']);
+        Route::get('re-score-history/{id}',[PostController::class,'reScoreHistory']);
         Route::post('v3/post',[PostController::class,'storeV3']);
         Route::post('p2p/{id}',[PostController::class,'P2P']);
         Route::put('delete-post/{id}',[PostController::class,'delete']);
