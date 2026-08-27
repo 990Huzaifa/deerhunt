@@ -243,10 +243,11 @@ class AuthController extends Controller
 
             $user = User::where('email', $request->email)->first();
 
-            app(MailService::class)->sendForgotPasswordOtp(
+            myMailSend(
                 $user->email,
                 $user->full_name,
-                $token
+                'Forgot Password Mail',
+                '<p>Your password reset OTP is <strong>' . $token . '</strong>.</p>'
             );
 
             return response()->json([
@@ -333,10 +334,11 @@ class AuthController extends Controller
                     'created_at' => now()
                 ]);
 
-            app(MailService::class)->sendForgotPasswordOtp(
+            myMailSend(
                 $user->email,
                 $user->full_name,
-                $token
+                'Forgot Password Mail',
+                '<p>Your new password reset OTP is <strong>' . $token . '</strong>.</p>'
             );
 
             return response()->json(['token' => $token], 200);
