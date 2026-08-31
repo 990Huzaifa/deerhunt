@@ -86,106 +86,155 @@ class PostController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
-            $validator = Validator::make($request->all(), [
-                'title' => 'nullable',
-                'image' => 'required|image|mimes:jpeg,png,jpg,gif,svg,heic,heif',
-                'score' => 'required',
-                'analysis'=> 'required',
-                'ref_data' => 'nullable|array',
-                'ref_data.*.title' => 'nullable|string',
-                'ref_data.*.score' => 'required_with:ref_data|numeric',
-                'ref_data.*.analysis' => 'required_with:ref_data|string',
-                'ref_data.*.image' => 'required_with:ref_data|image|mimes:jpeg,png,jpg,gif,svg,heic,heif',
-                'measurements' => 'nullable|array',
-                'antler_points' => 'nullable|array',
-                'deer_age_estimate' => 'nullable|boolean',
-                'growth_projection' => 'nullable|boolean',
-                'estimated_age' => 'required_if:deer_age_estimate,true|integer',
-            ], [
-                'image.required' => 'Image is required',
-                'image.image' => 'Image must be an image',
-                'image.mimes' => 'Image must be a jpeg, png, jpg, gif, or svg',
-                'score.required' => 'Score is required',
-                'analysis.required' => 'Analysis is required',
-                'ref_data.array' => 'Reference data must be an array',
-                'ref_data.*.score.required_with' => 'Score is required for reference data',
-                'ref_data.*.score.numeric' => 'Score must be a number for reference data',
-                'ref_data.*.analysis.required_with' => 'Analysis is required for reference data',    
-                'ref_data.*.image.required_with' => 'Image is required for reference data',
-                'ref_data.*.image.image' => 'Image must be an image for reference data',
-                'ref_data.*.image.mimes' => 'Image must be a jpeg, png, jpg, gif, or svg for reference data',
-                'measurements.array' => 'Measurements must be an array',
-                'antler_points.array' => 'Antler points must be an array',
-                'deer_age_estimate.boolean' => 'Deer age estimate must be true or false',
-                'growth_projection.boolean' => 'Growth projection must be true or false',
-                'estimated_age.required_if' => 'Estimated age is required when deer age estimate is true',
-                'estimated_age.integer' => 'Estimated age must be an integer',
-            ]);
-            if ($validator->fails()) throw new Exception($validator->errors()->first(),400);
-    
-            $image = null;
-            if ($request->hasFile('image')) {
-                $image = $request->file('image');
-                $image_name = 'post-image' . time()  .rand(1000, 999999). '.' . $image->getClientOriginalExtension();
-                $image->move(public_path('post-image'), $image_name);
-                $image = 'post-image/' . $image_name;
-            }
-            // merge image with ref data images
-            // $allImagePaths = [$image];
-            $post = Post::create([
-                'user_id' => $user->id,
-                'title' => $request->title ?? null,
-                'image' => $image,
-                'score' => $request->score,
-                'analysis' => $request->analysis,
-                'measurements' => json_encode($request->measurements) ?? null,
-                'antler_points' => json_encode($request->antler_points) ?? null,
-                'deer_age_estimate' => $request->deer_age_estimate ?? false,
-                'growth_projection' => $request->growth_projection ?? false,
-                'estimated_age' => $request->estimated_age ?? null,
-                'years_age' => json_encode($request->years_age) ?? null,
-                'is_public' => false,
-                'is_private' => true,
-            ]);
-            // increment analysis count in users table
-            $user->increment('analysis_count');
-
-            // store ref data with ref_id = post id
-            if(isset($request->ref_data)){
-                $ref_data = $request->ref_data;
-                foreach($ref_data as $item){
-                    $ref_image = null;
-                    if (isset($item['image']) && $item['image']) {
-                        $ref_image_file = $item['image'];
-                        $ref_image_name = 'post-image' . time() .rand(1000, 999999) . '.' . $ref_image_file->getClientOriginalExtension();
-                        $ref_image_file->move(public_path('post-image'), $ref_image_name);
-                        $ref_image = 'post-image/' . $ref_image_name;
-                    }
-                    //$allImagePaths = array_merge($allImagePaths, [$ref_image]);
-                    Post::create([
-                        'user_id' => $user->id,
-                        'title' => $item['title'] ?? null,
-                        'image' => $ref_image,
-                        'score' => $request->score,
-                        'analysis' => $item['analysis'],
-                        'ref_id' => $post->id
-                    ]);
-                }
-            }
-
-            // here we update post images with all image paths by imploding them with comma
-            // $post->update([
-            //     'image' => implode(',', $allImagePaths)
-            // ]);
-
+            $post = $this->createPost($request);
             return response()->json($post);
-
         } catch (QueryException $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         } catch (Exception $e) {
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
         }
+    }
+
+    private function createPost(Request $request): Post
+    {
+        $user = Auth::user();
+        $validator = Validator::make($request->all(), [
+            'title' => 'required|string',
+            'image' => 'nullable|file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
+            'images' => 'nullable|array|min:1',
+            'images.*' => 'file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
+            'score' => 'nullable',
+            'analysis'=> 'nullable',
+            'ref_data' => 'nullable|array',
+            'ref_data.*.title' => 'nullable|string',
+            'ref_data.*.score' => 'required_with:ref_data|numeric',
+            'ref_data.*.analysis' => 'required_with:ref_data|string',
+            'ref_data.*.image' => 'required_with:ref_data|file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
+            'measurements' => 'nullable|array',
+            'antler_points' => 'nullable|array',
+            'deer_age_estimate' => 'nullable|boolean',
+            'growth_projection' => 'nullable|boolean',
+            'estimated_age' => 'required_if:deer_age_estimate,true|integer',
+            'is_public' => 'nullable|boolean',
+            'is_private' => 'nullable|boolean',
+            'hunt_date' => 'required|date',
+            'location' => 'required|string',
+            'notes' => 'nullable',
+            'caption' => 'nullable',
+            'harvest_type' => 'nullable|string',
+            'state' => 'nullable|string',
+            'county' => 'nullable|string',
+        ], [
+            'image.required' => 'Image is required',
+            'image.uploaded' => 'Image must be uploaded',
+            'image.file' => 'Image must be a file',
+            'image.image' => 'Image must be an image',
+            'image.mimes' => 'Image must be a jpeg, png, jpg, gif, or svg',
+            'images.array' => 'Images must be an array',
+            'images.min' => 'At least one image is required',
+            'images.*.image' => 'Each image must be an image',
+            'images.*.mimes' => 'Each image must be a jpeg, png, jpg, gif, or svg',
+            'score.required' => 'Score is required',
+            'analysis.required' => 'Analysis is required',
+            'ref_data.array' => 'Reference data must be an array',
+            'ref_data.*.score.required_with' => 'Score is required for reference data',
+            'ref_data.*.score.numeric' => 'Score must be a number for reference data',
+            'ref_data.*.analysis.required_with' => 'Analysis is required for reference data',
+            'ref_data.*.image.required_with' => 'Image is required for reference data',
+            'ref_data.*.image.image' => 'Image must be an image for reference data',
+            'ref_data.*.image.mimes' => 'Image must be a jpeg, png, jpg, gif, or svg for reference data',
+            'measurements.array' => 'Measurements must be an array',
+            'antler_points.array' => 'Antler points must be an array',
+            'deer_age_estimate.boolean' => 'Deer age estimate must be true or false',
+            'growth_projection.boolean' => 'Growth projection must be true or false',
+            'estimated_age.required_if' => 'Estimated age is required when deer age estimate is true',
+            'estimated_age.integer' => 'Estimated age must be an integer',
+            'title.required' => 'Title is required',
+            'hunt_date.required' => 'Hunt date is required',
+            'hunt_date.date' => 'Hunt date must be a valid date',
+            'location.required' => 'Location is required',
+        ]);
+
+        if ($validator->fails()) throw new Exception($validator->errors()->first(),400);
+
+        $image = null;
+        if ($request->hasFile('image')) {
+            $uploadedImage = uploadImageToPublic(
+                $request->file('image'),
+                'post-image',
+                'post-image'
+            );
+            $image = $uploadedImage['path'];
+        }
+        if($request->hasFile('images')){
+            $images = [];
+            foreach($request->file('images') as $img){
+                $uploadedImage = uploadImageToPublic(
+                    $img,
+                    'post-image',
+                    'post-image'
+                );
+                $images[] = $uploadedImage['path'];
+            }
+            $image = implode(',', $images);
+        }
+
+        $allImagePaths = [$image];
+        $is_trophy = $request->is_public ? true : false;
+        $post = Post::create([
+            'user_id' => $user->id,
+            'title' => $request->title,
+            'image' => $image,
+            'score' => $request->score ?? null,
+            'analysis' => $request->analysis ?? null,
+            'measurements' => json_encode($request->measurements) ?? null,
+            'antler_points' => json_encode($request->antler_points) ?? null,
+            'deer_age_estimate' => $request->deer_age_estimate ?? false,
+            'growth_projection' => $request->growth_projection ?? false,
+            'estimated_age' => $request->estimated_age ?? null,
+            'years_age' => json_encode($request->years_age) ?? null,
+            'is_public' => $request->is_public ?? false,
+            'is_private' => $request->is_private ?? false,
+            'caption' => $request->caption ?? null,
+            'state' => $request->state ?? $user->state,
+            'county' => $request->county ?? $user->county,
+            'harvest_type' => $request->harvest_type ?? null,
+            'hunt_date' => $request->hunt_date,
+            'location' => $request->location,
+            'notes' => $request->notes ?? null,
+            'is_trophy' => true,
+        ]);
+        $user->increment('analysis_count');
+
+        if(isset($request->ref_data)){
+            $ref_data = $request->ref_data;
+            foreach($ref_data as $item){
+                $ref_image = null;
+                if (isset($item['image']) && $item['image']) {
+                    $ref_image = uploadImageToPublic(
+                        $item['image'],
+                        'post-image',
+                        'post-image'
+                    );
+                    $ref_image = $ref_image['path'];
+                }
+                $allImagePaths = array_merge($allImagePaths, [$ref_image]);
+                Post::create([
+                    'user_id' => $user->id,
+                    'title' => $item['title'] ?? null,
+                    'image' => $ref_image,
+                    'score' => $item['score'],
+                    'analysis' => $item['analysis'],
+                    'ref_id' => $post->id
+                ]);
+            }
+        }
+
+        $post->update([
+            'image' => implode(',', $allImagePaths)
+        ]);
+
+        return $post->fresh();
     }
 
     public function show($id): JsonResponse

@@ -42,6 +42,9 @@ return new class extends Migration
             $table->unsignedBigInteger('ref_id')->nullable();
             $table->unsignedBigInteger('linked_post_id')->nullable();
             $table->foreign('linked_post_id')->references('id')->on('posts')->onDelete(null);
+            $table->date('hunt_date')->nullable();
+            $table->longText('notes')->nullable();
+            $table->longText('location')->nullable();
             $table->timestamps();
         });
     }

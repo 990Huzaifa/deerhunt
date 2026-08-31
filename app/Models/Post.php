@@ -37,6 +37,11 @@ class Post extends Model
         'harvest_type',
         'linked_post_id',
 
+        // new fields
+        'hunt_date',
+        'notes',
+        'location',
+
         'created_at'
     ];
 
