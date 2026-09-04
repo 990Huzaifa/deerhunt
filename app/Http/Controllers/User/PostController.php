@@ -234,7 +234,71 @@ class PostController extends Controller
             'image' => implode(',', $allImagePaths)
         ]);
 
-        return $post->fresh();
+        $post = $post->fresh();
+        $this->notifyPreviousTopScoreBeaten($post);
+
+        return $post;
+    }
+
+    /**
+     * Notify the previous global top-score holder when a new post beats their score.
+     * Uses NotificationService (DB row + FirebaseService FCM).
+     */
+    private function notifyPreviousTopScoreBeaten(Post $post): void
+    {
+        if ($post->score === null || $post->score === '') {
+            return;
+        }
+
+        try {
+            $previousTop = Post::with('user')
+                ->where('is_delete', false)
+                ->whereNull('ref_id')
+                ->where('is_trophy', true)
+                ->where('id', '!=', $post->id)
+                ->excludeRescoreVersions()
+                ->orderByDesc('score')
+                ->first();
+
+            if (!$previousTop || !$previousTop->user_id) {
+                return;
+            }
+
+            if ((float) $post->score <= (float) $previousTop->score) {
+                return;
+            }
+
+            if ($post->user_id == $previousTop->user_id) {
+                return;
+            }
+
+            $beater = Auth::user();
+            $receiver = $previousTop->user;
+            if (!$receiver) {
+                return;
+            }
+
+            $this->notificationService->send(
+                $post->user_id,
+                $previousTop->user_id,
+                'high_score',
+                "{$beater->username} beat your high score.",
+                'High Score Beaten',
+                [
+                    'type' => 'high_score',
+                    'post_id' => $post->id,
+                    'new_score' => $post->score,
+                    'previous_score' => $previousTop->score,
+                    'previous_post_id' => $previousTop->id,
+                    'receiver_username' => $receiver->username,
+                ]
+            );
+        } catch (Exception $e) {
+            Log::error('Failed to send high score beaten notification', [
+                'post_id' => $post->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function show($id): JsonResponse

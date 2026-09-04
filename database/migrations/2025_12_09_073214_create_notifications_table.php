@@ -16,7 +16,7 @@ return new class extends Migration
             $table->unsignedBigInteger('sender_id');   // who performed the action
             $table->unsignedBigInteger('receiver_id'); // who receives the notification
             $table->longText('title'); // like, comment, follow
-            $table->enum('type', ['like', 'comment', 'reply', 'follow']); // like, comment, reply, follow
+            $table->enum('type', ['like', 'comment', 'reply', 'follow','high_score']); // like, comment, reply, follow
             $table->longText('message')->nullable(); // message shown to user
             $table->json('data')->nullable(); // extra data like post_id, comment_id etc.
             $table->timestamp('read_at')->nullable();

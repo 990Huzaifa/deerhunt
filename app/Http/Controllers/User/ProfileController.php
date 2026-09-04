@@ -512,4 +512,16 @@ class ProfileController extends Controller
             return response()->json(["error" => $e->getMessage()],500);
         }
     }
+
+    public function fcmUpdate(Request $request): JsonResponse
+    {
+        try{
+            $user = Auth::user();
+            $user->fcm_token = $request->fcm_token;
+            $user->save();
+            return response()->json(['message' => 'FCM token updated successfully']);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }

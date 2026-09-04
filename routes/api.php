@@ -74,7 +74,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('listen-from', [AuthController::class, 'listenFrom']);
         Route::post('change-password', [AuthController::class, 'changePassword']);
         Route::get('/logout', [AuthController::class, 'logout']);
-
+        Route::post('fcm-update', [ProfileController::class, 'fcmUpdate']);
+        
         Route::get('dashboard', [HomeController::class,'index']);
         Route::get('recent-posts', [HomeController::class,'recent']);
 
