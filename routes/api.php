@@ -82,6 +82,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::apiResource('/post', PostController::class)->only(['index', 'store', 'show', 'destroy']);
         Route::get('community',[PostController::class,'communityPosts']);
         Route::get('trophy-list',[PostController::class,'trophyList']);
+        Route::get('recent-list',[PostController::class,'recentList']);
         Route::post('recent/post',[PostController::class,'storeAsRecent']);
         Route::post('v2/post',[PostController::class,'storeV2']);
 

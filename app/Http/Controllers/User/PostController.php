@@ -80,6 +80,33 @@ class PostController extends Controller
         }
     }
 
+    public function recentList(Request $request): JsonResponse
+    {
+        try {
+            $search = $request->query('search');
+            $user = Auth::user();
+
+            $posts = Post::select('posts.*', 'users.full_name', 'users.avatar')
+                ->join('users', 'users.id', '=', 'posts.user_id')
+                ->orderBy('posts.created_at', 'desc')
+                ->where('posts.user_id', $user->id)
+                ->where('posts.is_trophy', false)
+                ->where('posts.is_delete', false)
+                ->where('ref_id', null)
+                ->excludeRescoreVersions()
+                ->where(function ($query) use ($search) {
+                    $query->where('posts.title', 'like', '%' . $search . '%');
+                })
+                ->paginate(200);
+
+            return response()->json($posts);
+        } catch (QueryException $e) {
+            return response()->json(['DB error' => $e->getMessage()], 500);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
+    }
+
     /**
      * Store a newly created resource in storage.
      */
