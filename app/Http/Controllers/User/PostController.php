@@ -17,6 +17,8 @@ use App\Models\PostView;
 use App\Models\PostLike;
 use App\Models\PostComment;
 use App\Services\NotificationService;
+use App\Jobs\StoreAsRecentPostJob;
+use Illuminate\Support\Str;
 
 class PostController extends Controller
 {
@@ -125,8 +127,126 @@ class PostController extends Controller
     public function storeAsRecent(Request $request): JsonResponse
     {
         try {
-            $post = $this->createPost($request, true);
-            return response()->json($post);
+            $user = Auth::user();
+            $validator = Validator::make($request->all(), [
+                'title' => 'required|string',
+                'image' => 'nullable|file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
+                'images' => 'nullable|array|min:1',
+                'images.*' => 'file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
+                'score' => 'nullable',
+                'analysis' => 'nullable',
+                'ref_data' => 'nullable|array',
+                'ref_data.*.title' => 'nullable|string',
+                'ref_data.*.score' => 'required_with:ref_data|numeric',
+                'ref_data.*.analysis' => 'required_with:ref_data|string',
+                'ref_data.*.image' => 'required_with:ref_data|file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
+                'measurements' => 'nullable|array',
+                'antler_points' => 'nullable|array',
+                'deer_age_estimate' => 'nullable|boolean',
+                'growth_projection' => 'nullable|boolean',
+                'estimated_age' => 'required_if:deer_age_estimate,true|integer',
+                'is_public' => 'nullable|boolean',
+                'is_private' => 'nullable|boolean',
+                'hunt_date' => 'required|date',
+                'location' => 'required|string',
+                'notes' => 'nullable',
+                'caption' => 'nullable',
+                'harvest_type' => 'nullable|string',
+                'state' => 'nullable|string',
+                'county' => 'nullable|string',
+            ], [
+                'image.uploaded' => 'Image must be uploaded',
+                'image.file' => 'Image must be a file',
+                'image.image' => 'Image must be an image',
+                'image.mimes' => 'Image must be a jpeg, png, jpg, gif, or svg',
+                'images.array' => 'Images must be an array',
+                'images.min' => 'At least one image is required',
+                'images.*.image' => 'Each image must be an image',
+                'images.*.mimes' => 'Each image must be a jpeg, png, jpg, gif, or svg',
+                'ref_data.array' => 'Reference data must be an array',
+                'ref_data.*.score.required_with' => 'Score is required for reference data',
+                'ref_data.*.score.numeric' => 'Score must be a number for reference data',
+                'ref_data.*.analysis.required_with' => 'Analysis is required for reference data',
+                'ref_data.*.image.required_with' => 'Image is required for reference data',
+                'ref_data.*.image.image' => 'Image must be an image for reference data',
+                'ref_data.*.image.mimes' => 'Image must be a jpeg, png, jpg, gif, or svg for reference data',
+                'measurements.array' => 'Measurements must be an array',
+                'antler_points.array' => 'Antler points must be an array',
+                'deer_age_estimate.boolean' => 'Deer age estimate must be true or false',
+                'growth_projection.boolean' => 'Growth projection must be true or false',
+                'estimated_age.required_if' => 'Estimated age is required when deer age estimate is true',
+                'estimated_age.integer' => 'Estimated age must be an integer',
+                'title.required' => 'Title is required',
+                'hunt_date.required' => 'Hunt date is required',
+                'hunt_date.date' => 'Hunt date must be a valid date',
+                'location.required' => 'Location is required',
+            ]);
+
+            if ($validator->fails()) {
+                throw new Exception($validator->errors()->first(), 400);
+            }
+
+            $tempDir = 'temp/recent-posts/' . Str::uuid()->toString();
+            $payload = [
+                'title' => $request->title,
+                'score' => $request->score,
+                'analysis' => $request->analysis,
+                'measurements' => $request->measurements,
+                'antler_points' => $request->antler_points,
+                'deer_age_estimate' => $request->deer_age_estimate,
+                'growth_projection' => $request->growth_projection,
+                'estimated_age' => $request->estimated_age,
+                'years_age' => $request->years_age,
+                'is_public' => $request->boolean('is_public'),
+                'is_private' => $request->boolean('is_private'),
+                'caption' => $request->caption,
+                'state' => $request->state,
+                'county' => $request->county,
+                'harvest_type' => $request->harvest_type,
+                'hunt_date' => $request->hunt_date,
+                'location' => $request->location,
+                'notes' => $request->notes,
+                'image' => null,
+                'images' => null,
+                'ref_data' => null,
+            ];
+
+            if ($request->hasFile('image')) {
+                $payload['image'] = $request->file('image')->store($tempDir, 'local');
+            }
+
+            if ($request->hasFile('images')) {
+                $images = [];
+                foreach ($request->file('images') as $img) {
+                    $images[] = $img->store($tempDir, 'local');
+                }
+                $payload['images'] = $images;
+            }
+
+            if ($request->has('ref_data') && is_array($request->ref_data)) {
+                $refData = [];
+                foreach ($request->ref_data as $index => $item) {
+                    $refImage = null;
+                    if ($request->hasFile("ref_data.{$index}.image")) {
+                        $refImage = $request->file("ref_data.{$index}.image")->store($tempDir, 'local');
+                    }
+
+                    $refData[] = [
+                        'title' => $item['title'] ?? null,
+                        'score' => $item['score'],
+                        'analysis' => $item['analysis'],
+                        'image' => $refImage,
+                    ];
+                }
+                $payload['ref_data'] = $refData;
+            }
+
+            StoreAsRecentPostJob::dispatch($user->id, $payload, $tempDir);
+
+            return response()->json([
+                'message' => 'Recent post is being processed',
+                'status' => 'queued',
+            ], 202);
         } catch (QueryException $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         } catch (Exception $e) {
