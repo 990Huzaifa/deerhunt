@@ -86,7 +86,7 @@ class PostController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
-            $post = $this->createPost($request);
+            $post = $this->createPost($request, false);
             return response()->json($post);
         } catch (QueryException $e) {
             return response()->json(['error' => $e->getMessage()], 500);
@@ -95,7 +95,19 @@ class PostController extends Controller
         }
     }
 
-    private function createPost(Request $request): Post
+    public function storeAsRecent(Request $request): JsonResponse
+    {
+        try {
+            $post = $this->createPost($request, true);
+            return response()->json($post);
+        } catch (QueryException $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
+    }
+
+    private function createPost(Request $request, bool $isRecent = false): Post
     {
         $user = Auth::user();
         $validator = Validator::make($request->all(), [
@@ -202,7 +214,7 @@ class PostController extends Controller
             'hunt_date' => $request->hunt_date,
             'location' => $request->location,
             'notes' => $request->notes ?? null,
-            'is_trophy' => true,
+            'is_trophy' => $isRecent ? false : true,
         ]);
         $user->increment('analysis_count');
 
