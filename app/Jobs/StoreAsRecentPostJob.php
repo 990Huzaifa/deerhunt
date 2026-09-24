@@ -73,8 +73,8 @@ class StoreAsRecentPostJob implements ShouldQueue
                 'state' => $this->payload['state'] ?? $user->state,
                 'county' => $this->payload['county'] ?? $user->county,
                 'harvest_type' => $this->payload['harvest_type'] ?? null,
-                'hunt_date' => $this->payload['hunt_date'],
-                'location' => $this->payload['location'],
+                'hunt_date' => $this->payload['hunt_date'] ?? null,
+                'location' => $this->payload['location'] ?? null,
                 'notes' => $this->payload['notes'] ?? null,
                 'is_trophy' => false,
             ]);
@@ -93,8 +93,8 @@ class StoreAsRecentPostJob implements ShouldQueue
                         'user_id' => $user->id,
                         'title' => $item['title'] ?? null,
                         'image' => $refImage,
-                        'score' => $item['score'],
-                        'analysis' => $item['analysis'],
+                        'score' => $item['score'] ?? null,
+                        'analysis' => $item['analysis'] ?? null,
                         'ref_id' => $post->id,
                     ]);
                 }
