@@ -596,6 +596,9 @@ class PostController extends Controller
             // if($post->user_id != $user->id) throw new Exception('Unauthorized',403);
             $validator = Validator::make($request->all(), [
                 'title' => 'required',
+                'state' => 'nullable',
+                'county' => 'nullable',
+                'notes' => 'nullable',
             ], [
                 'title.required' => 'Title is required',
             ]);
@@ -603,6 +606,9 @@ class PostController extends Controller
             if($post->is_trophy) throw new Exception('Post is already a trophy',400);
             $post->update([
                 'title' => $request->title ?? $post->title,
+                'state' => $request->state ?? $post->state,
+                'county' => $request->county ?? $post->county,
+                'notes' => $request->notes ?? $post->notes,
                 'is_trophy' => true,
                 'is_private' => true,
             ]);
