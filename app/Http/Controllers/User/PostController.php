@@ -93,10 +93,6 @@ class PostController extends Controller
                 ->where('posts.user_id', $user->id)
                 ->where('posts.is_delete', false)
                 ->where('ref_id', null)
-                ->excludeRescoreVersions()
-                ->where(function ($query) use ($search) {
-                    $query->where('posts.title', 'like', '%' . $search . '%');
-                })
                 ->paginate(200);
 
             return response()->json($posts);
