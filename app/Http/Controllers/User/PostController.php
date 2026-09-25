@@ -17,7 +17,6 @@ use App\Models\PostView;
 use App\Models\PostLike;
 use App\Models\PostComment;
 use App\Services\NotificationService;
-use App\Jobs\StoreAsRecentPostJob;
 
 class PostController extends Controller
 {
@@ -121,8 +120,20 @@ class PostController extends Controller
     public function storeAsRecent(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
-            $validator = Validator::make($request->all(), [
+            $post = $this->createPost($request, true);
+            return response()->json($post);
+        } catch (QueryException $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
+    }
+
+    private function createPost(Request $request, bool $isRecent = false): Post
+    {
+        $user = Auth::user();
+        $rules = $isRecent
+            ? [
                 'score' => 'required',
                 'title' => 'nullable|string',
                 'image' => 'nullable|file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
@@ -148,138 +159,36 @@ class PostController extends Controller
                 'harvest_type' => 'nullable|string',
                 'state' => 'nullable|string',
                 'county' => 'nullable|string',
-            ], [
-                'score.required' => 'Score is required',
-                'image.uploaded' => 'Image must be uploaded',
-                'image.file' => 'Image must be a file',
-                'image.image' => 'Image must be an image',
-                'image.mimes' => 'Image must be a jpeg, png, jpg, gif, or svg',
-                'images.array' => 'Images must be an array',
-                'images.*.image' => 'Each image must be an image',
-                'images.*.mimes' => 'Each image must be a jpeg, png, jpg, gif, or svg',
-                'ref_data.array' => 'Reference data must be an array',
-                'ref_data.*.score.numeric' => 'Score must be a number for reference data',
-                'ref_data.*.image.image' => 'Image must be an image for reference data',
-                'ref_data.*.image.mimes' => 'Image must be a jpeg, png, jpg, gif, or svg for reference data',
-                'measurements.array' => 'Measurements must be an array',
-                'antler_points.array' => 'Antler points must be an array',
-                'deer_age_estimate.boolean' => 'Deer age estimate must be true or false',
-                'growth_projection.boolean' => 'Growth projection must be true or false',
-                'estimated_age.integer' => 'Estimated age must be an integer',
-                'hunt_date.date' => 'Hunt date must be a valid date',
-            ]);
-
-            if ($validator->fails()) {
-                throw new Exception($validator->errors()->first(), 400);
-            }
-
-            $payload = [
-                'title' => $request->title,
-                'score' => $request->score,
-                'analysis' => $request->analysis,
-                'measurements' => $request->measurements,
-                'antler_points' => $request->antler_points,
-                'deer_age_estimate' => $request->deer_age_estimate,
-                'growth_projection' => $request->growth_projection,
-                'estimated_age' => $request->estimated_age,
-                'years_age' => $request->years_age,
-                'is_public' => $request->boolean('is_public'),
-                'is_private' => $request->boolean('is_private'),
-                'caption' => $request->caption,
-                'state' => $request->state,
-                'county' => $request->county,
-                'harvest_type' => $request->harvest_type,
-                'hunt_date' => $request->hunt_date,
-                'location' => $request->location,
-                'notes' => $request->notes,
-                'image' => null,
-                'images' => null,
-                'ref_data' => null,
+            ]
+            : [
+                'title' => 'required|string',
+                'image' => 'nullable|file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
+                'images' => 'nullable|array|min:1',
+                'images.*' => 'file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
+                'score' => 'nullable',
+                'analysis'=> 'nullable',
+                'ref_data' => 'nullable|array',
+                'ref_data.*.title' => 'nullable|string',
+                'ref_data.*.score' => 'required_with:ref_data|numeric',
+                'ref_data.*.analysis' => 'required_with:ref_data|string',
+                'ref_data.*.image' => 'required_with:ref_data|file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
+                'measurements' => 'nullable|array',
+                'antler_points' => 'nullable|array',
+                'deer_age_estimate' => 'nullable|boolean',
+                'growth_projection' => 'nullable|boolean',
+                'estimated_age' => 'required_if:deer_age_estimate,true|integer',
+                'is_public' => 'nullable|boolean',
+                'is_private' => 'nullable|boolean',
+                'hunt_date' => 'required|date',
+                'location' => 'required|string',
+                'notes' => 'nullable',
+                'caption' => 'nullable',
+                'harvest_type' => 'nullable|string',
+                'state' => 'nullable|string',
+                'county' => 'nullable|string',
             ];
 
-            // Upload images to final public path before queueing (queue workers
-            // cannot reliably access PHP temp / storage temp paths).
-            if ($request->hasFile('image')) {
-                $payload['image'] = uploadImageToPublic(
-                    $request->file('image'),
-                    'post-image',
-                    'post-image'
-                )['path'];
-            }
-
-            if ($request->hasFile('images')) {
-                $images = [];
-                foreach ($request->file('images') as $img) {
-                    $images[] = uploadImageToPublic($img, 'post-image', 'post-image')['path'];
-                }
-                $payload['images'] = $images;
-            }
-
-            if ($request->has('ref_data') && is_array($request->ref_data)) {
-                $refData = [];
-                foreach ($request->ref_data as $index => $item) {
-                    $refImage = null;
-                    if ($request->hasFile("ref_data.{$index}.image")) {
-                        $refImage = uploadImageToPublic(
-                            $request->file("ref_data.{$index}.image"),
-                            'post-image',
-                            'post-image'
-                        )['path'];
-                    }
-
-                    $refData[] = [
-                        'title' => $item['title'] ?? null,
-                        'score' => $item['score'] ?? null,
-                        'analysis' => $item['analysis'] ?? null,
-                        'image' => $refImage,
-                    ];
-                }
-                $payload['ref_data'] = $refData;
-            }
-
-            StoreAsRecentPostJob::dispatch($user->id, $payload);
-
-            return response()->json([
-                'message' => 'Recent post is being processed',
-                'status' => 'queued',
-            ], 202);
-        } catch (QueryException $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
-        }
-    }
-
-    private function createPost(Request $request, bool $isRecent = false): Post
-    {
-        $user = Auth::user();
-        $validator = Validator::make($request->all(), [
-            'title' => 'required|string',
-            'image' => 'nullable|file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
-            'images' => 'nullable|array|min:1',
-            'images.*' => 'file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
-            'score' => 'nullable',
-            'analysis'=> 'nullable',
-            'ref_data' => 'nullable|array',
-            'ref_data.*.title' => 'nullable|string',
-            'ref_data.*.score' => 'required_with:ref_data|numeric',
-            'ref_data.*.analysis' => 'required_with:ref_data|string',
-            'ref_data.*.image' => 'required_with:ref_data|file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
-            'measurements' => 'nullable|array',
-            'antler_points' => 'nullable|array',
-            'deer_age_estimate' => 'nullable|boolean',
-            'growth_projection' => 'nullable|boolean',
-            'estimated_age' => 'required_if:deer_age_estimate,true|integer',
-            'is_public' => 'nullable|boolean',
-            'is_private' => 'nullable|boolean',
-            'hunt_date' => 'required|date',
-            'location' => 'required|string',
-            'notes' => 'nullable',
-            'caption' => 'nullable',
-            'harvest_type' => 'nullable|string',
-            'state' => 'nullable|string',
-            'county' => 'nullable|string',
-        ], [
+        $validator = Validator::make($request->all(), $rules, [
             'image.required' => 'Image is required',
             'image.uploaded' => 'Image must be uploaded',
             'image.file' => 'Image must be a file',
@@ -335,7 +244,6 @@ class PostController extends Controller
         }
 
         $allImagePaths = [$image];
-        $is_trophy = $request->is_public ? true : false;
         $post = Post::create([
             'user_id' => $user->id,
             'title' => $request->title,
@@ -354,8 +262,8 @@ class PostController extends Controller
             'state' => $request->state ?? $user->state,
             'county' => $request->county ?? $user->county,
             'harvest_type' => $request->harvest_type ?? null,
-            'hunt_date' => $request->hunt_date,
-            'location' => $request->location,
+            'hunt_date' => $request->hunt_date ?? null,
+            'location' => $request->location ?? null,
             'notes' => $request->notes ?? null,
             'is_trophy' => $isRecent ? false : true,
         ]);
@@ -378,8 +286,8 @@ class PostController extends Controller
                     'user_id' => $user->id,
                     'title' => $item['title'] ?? null,
                     'image' => $ref_image,
-                    'score' => $item['score'],
-                    'analysis' => $item['analysis'],
+                    'score' => $item['score'] ?? null,
+                    'analysis' => $item['analysis'] ?? null,
                     'ref_id' => $post->id
                 ]);
             }
