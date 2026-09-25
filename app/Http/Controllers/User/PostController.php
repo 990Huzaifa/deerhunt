@@ -18,7 +18,6 @@ use App\Models\PostLike;
 use App\Models\PostComment;
 use App\Services\NotificationService;
 use App\Jobs\StoreAsRecentPostJob;
-use Illuminate\Support\Str;
 
 class PostController extends Controller
 {
@@ -178,7 +177,6 @@ class PostController extends Controller
                 throw new Exception($validator->errors()->first(), 400);
             }
 
-            $tempDir = 'temp/recent-posts/' . Str::uuid()->toString();
             $payload = [
                 'title' => $request->title,
                 'score' => $request->score,
@@ -203,14 +201,20 @@ class PostController extends Controller
                 'ref_data' => null,
             ];
 
+            // Upload images to final public path before queueing (queue workers
+            // cannot reliably access PHP temp / storage temp paths).
             if ($request->hasFile('image')) {
-                $payload['image'] = $request->file('image')->store($tempDir, 'local');
+                $payload['image'] = uploadImageToPublic(
+                    $request->file('image'),
+                    'post-image',
+                    'post-image'
+                )['path'];
             }
 
             if ($request->hasFile('images')) {
                 $images = [];
                 foreach ($request->file('images') as $img) {
-                    $images[] = $img->store($tempDir, 'local');
+                    $images[] = uploadImageToPublic($img, 'post-image', 'post-image')['path'];
                 }
                 $payload['images'] = $images;
             }
@@ -220,7 +224,11 @@ class PostController extends Controller
                 foreach ($request->ref_data as $index => $item) {
                     $refImage = null;
                     if ($request->hasFile("ref_data.{$index}.image")) {
-                        $refImage = $request->file("ref_data.{$index}.image")->store($tempDir, 'local');
+                        $refImage = uploadImageToPublic(
+                            $request->file("ref_data.{$index}.image"),
+                            'post-image',
+                            'post-image'
+                        )['path'];
                     }
 
                     $refData[] = [
@@ -233,7 +241,7 @@ class PostController extends Controller
                 $payload['ref_data'] = $refData;
             }
 
-            StoreAsRecentPostJob::dispatch($user->id, $payload, $tempDir);
+            StoreAsRecentPostJob::dispatch($user->id, $payload);
 
             return response()->json([
                 'message' => 'Recent post is being processed',
