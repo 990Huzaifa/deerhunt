@@ -92,7 +92,6 @@ class PostController extends Controller
                 ->join('users', 'users.id', '=', 'posts.user_id')
                 ->orderBy('posts.created_at', 'desc')
                 ->where('posts.user_id', $user->id)
-                ->where('posts.is_trophy', false)
                 ->where('posts.is_delete', false)
                 ->where('ref_id', null)
                 ->excludeRescoreVersions()
