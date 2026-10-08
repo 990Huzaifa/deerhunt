@@ -14,8 +14,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
-use App\Services\MailService;
+use App\Services\BrevoService;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Log;
 use Str;
 
 
@@ -98,6 +99,18 @@ class AuthController extends Controller
                 'county' => $request->county ?? null,
             ]);
             DB::commit();
+
+            try {
+                $brevo = app(BrevoService::class);
+                $brevo->registerContact($user);
+                $brevo->sendWelcomeEmail($user);
+            } catch (Exception $e) {
+                Log::error('Brevo signup sync failed', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             return response()->json(["message" => "Account Register successfully"], 200);
         }catch(QueryException $e){
             DB::rollBack();

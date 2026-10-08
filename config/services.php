@@ -52,5 +52,13 @@ return [
         'timeout' => env('MAIL_SERVICE_TIMEOUT', 20),
     ],
 
+    'brevo' => [
+        'api_key' => env('BREVO_API_KEY'),
+        'list_id' => (int) env('BREVO_LIST_ID', 3),
+        'welcome_template_id' => (int) env('BREVO_WELCOME_TEMPLATE_ID'),
+        'from_email' => env('MAIL_FROM_ADDRESS'),
+        'from_name' => env('MAIL_FROM_NAME', 'App Mailer'),
+    ],
+
 ];
 
