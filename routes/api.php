@@ -47,6 +47,7 @@ Route::delete('delete-user/{id}',[AuthController::class, 'deleteUser']);
 // webhook apple
 Route::post('/webhook/apple', [WebhookController::class, 'handle']);
 Route::post('/webhook/google', [WebhookController::class, 'handleGoogle']);
+Route::post('/webhook/revenuecat', [WebhookController::class, 'handleRevenueCat']);
 Route::get('request-jwt',[AuthController::class,'jwt']);
 Route::post('decode-apple-token',[WebhookController::class,'decodeApple']);
 

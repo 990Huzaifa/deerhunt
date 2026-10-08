@@ -5,6 +5,7 @@ namespace App\Http\Controllers\User;
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessAppleNotificationV2;
 use App\Jobs\ProcessGoogleNotification;
+use App\Jobs\ProcessRevenueCatWebhook;
 use App\Services\AppStoreConnectAuth;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -45,6 +46,23 @@ class WebhookController extends Controller
         // here ye need to set a job for better and background processing
         ProcessGoogleNotification::dispatch($data)->onQueue('google-webhooks');
         // Must return a 200 status code to acknowledge receipt
+        return response()->json(['status' => 'ok'], 200);
+    }
+
+    public function handleRevenueCat(Request $request): JsonResponse
+    {
+        $expectedAuth = config('services.revenuecat.webhook_auth');
+        $authHeader = $request->header('Authorization');
+
+        if (!$expectedAuth || $authHeader !== $expectedAuth) {
+            Log::warning('RevenueCat webhook unauthorized', [
+                'has_auth_header' => (bool) $authHeader,
+            ]);
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        ProcessRevenueCatWebhook::dispatch($request->all())->onQueue('revenuecat-webhooks');
+
         return response()->json(['status' => 'ok'], 200);
     }
 

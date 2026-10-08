@@ -11,9 +11,6 @@ class Subscription extends Model
 
     protected $fillable = [
         'user_id',
-        'credits_per_month',
-        'total_credits',
-        'released_credits',
         'plan',
         'platform',
         'status',

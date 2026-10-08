@@ -60,5 +60,9 @@ return [
         'from_name' => env('MAIL_FROM_NAME', 'App Mailer'),
     ],
 
+    'revenuecat' => [
+        'webhook_auth' => env('REVENUECAT_WEBHOOK_AUTH'),
+    ],
+
 ];
 
