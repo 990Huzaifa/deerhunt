@@ -18,7 +18,7 @@ return new class extends Migration
             $table->bigInteger('credits_per_month');
             $table->bigInteger('total_credits');
             $table->bigInteger('released_credits');
-            $table->enum('plan', ['basic_cred_monthly','basic_cred_yearly','unlimited_cred_monthly','unlimited_cred_yearly','basic-credt-monthly','basic-credt-yearly','unlimited-credt-monthly','unlimited-credt-yearly','basic-cred-monthly','basic-cred-yearly','unlimited-cred-monthly','unlimited-cred-yearly']);
+            $table->enum('plan', ["elite-yearly", "elite-monthly","pro-yearly", "pro-monthly", "elite_yearly", "elite_monthly","pro_yearly", "pro_monthly"]);
             $table->enum('platform', ['google', 'apple']);
             $table->enum('status', ['active', 'expired', 'canceled']);
             $table->enum('renewal_period', ['monthly','yearly']);

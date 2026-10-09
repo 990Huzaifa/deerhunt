@@ -49,6 +49,7 @@ class ProcessRevenueCatWebhook implements ShouldQueue
         }
 
         $productId = $event['product_id'] ?? null;
+        $plan = $this->normalizePlan($productId);
         $transactionId = $event['original_transaction_id']
             ?? $event['transaction_id']
             ?? null;
@@ -59,7 +60,7 @@ class ProcessRevenueCatWebhook implements ShouldQueue
         }
 
         $platform = $this->mapPlatform($event['store'] ?? null);
-        $renewalPeriod = $this->mapRenewalPeriod($productId);
+        $renewalPeriod = $this->mapRenewalPeriod($plan ?? $productId);
 
         $subscription = null;
         if ($transactionId) {
@@ -75,9 +76,18 @@ class ProcessRevenueCatWebhook implements ShouldQueue
             case 'UNCANCELLATION':
             case 'PRODUCT_CHANGE':
             case 'NON_RENEWING_PURCHASE':
+                if (!$plan) {
+                    Log::warning('RevenueCat webhook: unsupported plan', [
+                        'product_id' => $productId,
+                        'user_id' => $user->id,
+                        'type' => $type,
+                    ]);
+                    return;
+                }
+
                 $data = [
                     'user_id' => $user->id,
-                    'plan' => $productId,
+                    'plan' => $plan,
                     'platform' => $platform,
                     'status' => 'active',
                     'renewal_period' => $renewalPeriod,
@@ -158,6 +168,49 @@ class ProcessRevenueCatWebhook implements ShouldQueue
 
         if ($email && filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return User::where('email', $email)->first();
+        }
+
+        return null;
+    }
+
+    private function normalizePlan(?string $productId): ?string
+    {
+        if (!$productId) {
+            return null;
+        }
+
+        $allowed = [
+            'elite-yearly',
+            'elite-monthly',
+            'pro-yearly',
+            'pro-monthly',
+            'elite_yearly',
+            'elite_monthly',
+            'pro_yearly',
+            'pro_monthly',
+        ];
+
+        // Google/RC often sends "subscription_plans:elite-yearly"
+        $candidate = $productId;
+        if (str_contains($productId, ':')) {
+            $candidate = substr($productId, strrpos($productId, ':') + 1);
+        }
+
+        $candidate = strtolower(trim($candidate));
+
+        if (in_array($candidate, $allowed, true)) {
+            return $candidate;
+        }
+
+        // Try hyphen <-> underscore variants
+        $hyphen = str_replace('_', '-', $candidate);
+        if (in_array($hyphen, $allowed, true)) {
+            return $hyphen;
+        }
+
+        $underscore = str_replace('-', '_', $candidate);
+        if (in_array($underscore, $allowed, true)) {
+            return $underscore;
         }
 
         return null;
