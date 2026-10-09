@@ -44,6 +44,12 @@ class BrevoService
         ];
 
         try {
+            Log::info('Brevo registerContact: starting', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'list_id' => $listId,
+            ]);
+
             $response = Http::withHeaders([
                 'accept' => 'application/json',
                 'api-key' => $apiKey,
@@ -51,19 +57,43 @@ class BrevoService
             ])->post('https://api.brevo.com/v3/contacts', $data);
 
             if ($response->failed()) {
-                Log::error('Brevo contact sync failed', [
+                Log::error('Brevo registerContact: failed', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'list_id' => $listId,
+                    'status' => $response->status(),
                     'response' => $response->body(),
-                    'user' => $user->id,
                 ]);
+
+                return [
+                    'success' => false,
+                    'status' => $response->status(),
+                    'response' => $response->json(),
+                ];
             }
 
-            return $response->json();
+            Log::info('Brevo registerContact: success', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'list_id' => $listId,
+                'status' => $response->status(),
+                'response' => $response->json(),
+            ]);
+
+            return [
+                'success' => true,
+                'status' => $response->status(),
+                'response' => $response->json(),
+            ];
         } catch (\Exception $e) {
-            Log::error('Brevo API Exception: ' . $e->getMessage());
+            Log::error('Brevo registerContact: exception', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'list_id' => $listId,
+                'error' => $e->getMessage(),
+            ]);
             return false;
         }
-
-        
     }
 
     public function updateContact($user)
@@ -193,12 +223,12 @@ class BrevoService
     public function sendWelcomeEmail($user)
     {
         $apiKey = config('services.brevo.api_key', env('BREVO_API_KEY'));
-        $templateId = config('services.brevo.welcome_template_id', env('BREVO_WELCOME_TEMPLATE_ID'));
+        $templateId = (int) config('services.brevo.welcome_template_id', env('BREVO_WELCOME_TEMPLATE_ID'));
         $fromEmail = config('services.brevo.from_email', env('MAIL_FROM_ADDRESS'));
         $fromName = config('services.brevo.from_name', env('MAIL_FROM_NAME', 'App Mailer'));
-        
+
         $payload = [
-            'templateId' => (int) $templateId,
+            'templateId' => $templateId,
             'params' => [
                 'NAME' => $user->full_name,
             ],
@@ -213,14 +243,65 @@ class BrevoService
                 'name' => $fromName,
             ],
         ];
-        $response = Http::withHeaders([
-            'accept' => 'application/json',
-            'api-key' => $apiKey,
-            'content-type' => 'application/json',
-        ])->post($this->apiUrl, $payload);
 
-        if ($response->successful()) {
-            return ['success' => true, 'response' => $response->json()];
+        try {
+            Log::info('Brevo sendWelcomeEmail: starting', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'template_id' => $templateId,
+                'from_email' => $fromEmail,
+            ]);
+
+            $response = Http::withHeaders([
+                'accept' => 'application/json',
+                'api-key' => $apiKey,
+                'content-type' => 'application/json',
+            ])->post($this->apiUrl, $payload);
+
+            if ($response->successful()) {
+                Log::info('Brevo sendWelcomeEmail: success', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'template_id' => $templateId,
+                    'status' => $response->status(),
+                    'response' => $response->json(),
+                ]);
+
+                return [
+                    'success' => true,
+                    'template_id' => $templateId,
+                    'status' => $response->status(),
+                    'response' => $response->json(),
+                ];
+            }
+
+            Log::error('Brevo sendWelcomeEmail: failed', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'template_id' => $templateId,
+                'status' => $response->status(),
+                'response' => $response->body(),
+            ]);
+
+            return [
+                'success' => false,
+                'template_id' => $templateId,
+                'status' => $response->status(),
+                'response' => $response->json(),
+            ];
+        } catch (\Exception $e) {
+            Log::error('Brevo sendWelcomeEmail: exception', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'template_id' => $templateId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'template_id' => $templateId,
+                'error' => $e->getMessage(),
+            ];
         }
     }
 }
