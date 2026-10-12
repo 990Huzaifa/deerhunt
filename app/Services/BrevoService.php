@@ -141,8 +141,8 @@ class BrevoService
 
     public function sendMail(string $subject,string $toEmail,string $toName,string $htmlContent,string $fromEmail = null,string $fromName = null)
     {
-        $fromEmail = $fromEmail ?? env('MAIL_FROM_ADDRESS');
-        $fromName = $fromName ?? env('MAIL_FROM_NAME', 'App Mailer');
+        $fromEmail = $fromEmail ?? config('services.brevo.from_email', env('BREVO_FROM_EMAIL', 'info@rackscore.us'));
+        $fromName = $fromName ?? config('services.brevo.from_name', env('BREVO_FROM_NAME', 'RackScore'));
 
         $payload = [
             'sender' => [
@@ -177,8 +177,8 @@ class BrevoService
 
     public function sendServerAlertMail($diskUsage, $ramUsage)
     {
-        $fromEmail = $fromEmail ?? env('MAIL_FROM_ADDRESS');
-        $fromName = $fromName ?? env('MAIL_FROM_NAME', 'App Mailer');
+        $fromEmail = config('services.brevo.from_email', env('BREVO_FROM_EMAIL', 'info@rackscore.us'));
+        $fromName = config('services.brevo.from_name', env('BREVO_FROM_NAME', 'RackScore'));
 
         $htmlContent = "
             <h1>Server Alert</h1>
@@ -224,8 +224,8 @@ class BrevoService
     {
         $apiKey = config('services.brevo.api_key', env('BREVO_API_KEY'));
         $templateId = (int) config('services.brevo.welcome_template_id', env('BREVO_WELCOME_TEMPLATE_ID'));
-        $fromEmail = config('services.brevo.from_email', env('MAIL_FROM_ADDRESS'));
-        $fromName = config('services.brevo.from_name', env('MAIL_FROM_NAME', 'App Mailer'));
+        $fromEmail = config('services.brevo.from_email', env('BREVO_FROM_EMAIL', 'info@rackscore.us'));
+        $fromName = config('services.brevo.from_name', env('BREVO_FROM_NAME', 'RackScore'));
 
         $payload = [
             'templateId' => $templateId,
