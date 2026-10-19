@@ -114,6 +114,14 @@ class AuthController extends Controller
                     'email' => $user->email,
                     'result' => $contactResult,
                 ]);
+
+                $welcomeResult = $brevo->sendWelcomeEmail($user);
+                Log::info('Brevo signup flow: sendWelcomeEmail result', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'template_id' => config('services.brevo.welcome_template_id'),
+                    'result' => $welcomeResult,
+                ]);
             } catch (Exception $e) {
                 Log::error('Brevo signup sync failed', [
                     'user_id' => $user->id,
