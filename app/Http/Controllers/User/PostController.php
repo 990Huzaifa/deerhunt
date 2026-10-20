@@ -17,6 +17,7 @@ use App\Models\PostView;
 use App\Models\PostLike;
 use App\Models\PostComment;
 use App\Services\NotificationService;
+use App\Services\EngagementCampaignService;
 
 class PostController extends Controller
 {
@@ -25,9 +26,14 @@ class PostController extends Controller
      */
     // connect firebase service
     protected $notificationService;
-    public function __construct(NotificationService $notificationService)
-    {
+    protected $engagementCampaignService;
+
+    public function __construct(
+        NotificationService $notificationService,
+        EngagementCampaignService $engagementCampaignService
+    ) {
         $this->notificationService = $notificationService;
+        $this->engagementCampaignService = $engagementCampaignService;
     }
 
 
@@ -268,6 +274,7 @@ class PostController extends Controller
             'is_trophy' => $isRecent ? false : true,
         ]);
         $user->increment('analysis_count');
+        $this->engagementCampaignService->maybeEnrollOnSecondAnalysis($user, $post);
 
         if(isset($request->ref_data)){
             $ref_data = $request->ref_data;
@@ -599,19 +606,45 @@ class PostController extends Controller
                 'state' => 'nullable',
                 'county' => 'nullable',
                 'notes' => 'nullable',
+                'is_trophy' => 'nullable|in:true,false,1,0',
+                'is_public' => 'nullable|in:true,false,1,0',
             ], [
                 'title.required' => 'Title is required',
             ]);
             if ($validator->fails()) throw new Exception($validator->errors()->first(),400);
-            if($post->is_trophy) throw new Exception('Post is already a trophy',400);
-            $post->update([
+
+            $updateData = [
                 'title' => $request->title ?? $post->title,
                 'state' => $request->state ?? $post->state,
                 'county' => $request->county ?? $post->county,
                 'notes' => $request->notes ?? $post->notes,
-                'is_trophy' => true,
-                'is_private' => true,
-            ]);
+            ];
+
+            // New logic only when BOTH is_trophy and is_public are sent as true/false
+            $bothFlagsPresent = $request->filled('is_trophy') && $request->filled('is_public');
+
+            if ($bothFlagsPresent) {
+                if ($request->boolean('is_public')) {
+                    $updateData['is_public'] = true;
+                }
+
+                if ($request->boolean('is_trophy')) {
+                    if ($post->is_trophy) {
+                        throw new Exception('Post is already a trophy', 400);
+                    }
+                    $updateData['is_trophy'] = true;
+                    $updateData['is_private'] = true;
+                }
+            } else {
+                // Legacy behavior when flags are missing / empty
+                if ($post->is_trophy) {
+                    throw new Exception('Post is already a trophy', 400);
+                }
+                $updateData['is_trophy'] = true;
+                $updateData['is_private'] = true;
+            }
+
+            $post->update($updateData);
             return response()->json(['message' => 'Post saved as trophy'],200);
         }catch(Exception $e){
             return response()->json($e->getMessage(),500);
@@ -848,6 +881,7 @@ class PostController extends Controller
             'is_trophy' => $is_trophy,
         ]);
         $user->increment('analysis_count');
+        $this->engagementCampaignService->maybeEnrollOnSecondAnalysis($user, $post);
 
         if(isset($request->ref_data)){
             $ref_data = $request->ref_data;
