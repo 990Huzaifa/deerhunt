@@ -17,7 +17,6 @@ use App\Models\PostView;
 use App\Models\PostLike;
 use App\Models\PostComment;
 use App\Services\NotificationService;
-use App\Services\EngagementCampaignService;
 
 class PostController extends Controller
 {
@@ -26,14 +25,9 @@ class PostController extends Controller
      */
     // connect firebase service
     protected $notificationService;
-    protected $engagementCampaignService;
-
-    public function __construct(
-        NotificationService $notificationService,
-        EngagementCampaignService $engagementCampaignService
-    ) {
+    public function __construct(NotificationService $notificationService)
+    {
         $this->notificationService = $notificationService;
-        $this->engagementCampaignService = $engagementCampaignService;
     }
 
 
@@ -274,7 +268,6 @@ class PostController extends Controller
             'is_trophy' => $isRecent ? false : true,
         ]);
         $user->increment('analysis_count');
-        $this->engagementCampaignService->maybeEnrollOnSecondAnalysis($user, $post);
 
         if(isset($request->ref_data)){
             $ref_data = $request->ref_data;
@@ -881,7 +874,6 @@ class PostController extends Controller
             'is_trophy' => $is_trophy,
         ]);
         $user->increment('analysis_count');
-        $this->engagementCampaignService->maybeEnrollOnSecondAnalysis($user, $post);
 
         if(isset($request->ref_data)){
             $ref_data = $request->ref_data;
