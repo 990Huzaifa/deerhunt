@@ -96,6 +96,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('posts-like/{id}',[PostController::class,'postLike']);
         Route::get('posts-share/{id}',[PostController::class,'postShare']);
         Route::put('save-trophy/{id}',[PostController::class,'saveTrophy']);
+        Route::put('edit-post/{id}',[PostController::class,'editPost']);
 
         Route::post('post-comment/{id}',[PostController::class,'postComment']);
         Route::get('post-comment-list/{id}',[PostController::class,'postCommentList']);

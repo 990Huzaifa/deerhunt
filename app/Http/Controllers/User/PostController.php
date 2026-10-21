@@ -644,6 +644,74 @@ class PostController extends Controller
         }
     }
 
+    public function editPost(Request $request, string $id): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $post = Post::find($id);
+            if (!$post) {
+                throw new Exception('Post not found', 404);
+            }
+            if ($post->user_id != $user->id) {
+                throw new Exception('Unauthorized', 403);
+            }
+            if ($post->is_delete) {
+                throw new Exception('Post not found', 404);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'title' => 'nullable|string',
+                'caption' => 'nullable',
+                'harvest_type' => 'nullable|string',
+                'state' => 'nullable|string',
+                'county' => 'nullable|string',
+                'notes' => 'nullable',
+            ], [
+            ]);
+
+            if ($validator->fails()) {
+                throw new Exception($validator->errors()->first(), 400);
+            }
+
+            $updateData = [];
+
+            if ($request->exists('title')) {
+                $updateData['title'] = $request->title;
+            }
+            if ($request->exists('caption')) {
+                $updateData['caption'] = $request->caption;
+            }
+            if ($request->exists('harvest_type')) {
+                $updateData['harvest_type'] = $request->harvest_type;
+            }
+            if ($request->exists('state')) {
+                $updateData['state'] = $request->state;
+            }
+            if ($request->exists('county')) {
+                $updateData['county'] = $request->county;
+            }
+            if ($request->exists('notes')) {
+                $updateData['notes'] = $request->notes;
+            }
+
+            if (empty($updateData)) {
+                throw new Exception('No fields to update', 400);
+            }
+
+            $post->update($updateData);
+            $post->refresh();
+
+            return response()->json([
+                'message' => 'Post updated successfully',
+                'post' => $post,
+            ], 200);
+        } catch (QueryException $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
+    }
+
     public function destroy(string $id): JsonResponse
     {
         try {
