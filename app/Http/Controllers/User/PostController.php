@@ -618,13 +618,13 @@ class PostController extends Controller
 
             if ($bothFlagsPresent) {
                 if ($request->boolean('is_public')) {
-                    $updateData['is_public'] = true;
+                    $updateData['is_public'] = $request->boolean('is_public');
                 }
 
                 if ($request->boolean('is_trophy')) {
 
-                    $updateData['is_trophy'] = true;
-                    $updateData['is_private'] = true;
+                    $updateData['is_trophy'] = $request->boolean('is_trophy');
+                    $updateData['is_private'] = $request->boolean('is_trophy');
                 }
             } else {
                 // Legacy behavior when flags are missing / empty
