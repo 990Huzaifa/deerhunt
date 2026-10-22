@@ -622,9 +622,7 @@ class PostController extends Controller
                 }
 
                 if ($request->boolean('is_trophy')) {
-                    if ($post->is_trophy) {
-                        throw new Exception('Post is already a trophy', 400);
-                    }
+
                     $updateData['is_trophy'] = true;
                     $updateData['is_private'] = true;
                 }
