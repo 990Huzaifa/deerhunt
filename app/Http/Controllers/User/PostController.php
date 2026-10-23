@@ -796,7 +796,7 @@ class PostController extends Controller
                     // We still need to Eager Load the 'user' relationship
                     // for the accessors (username, avatar) to work efficiently.
                     // We select only the necessary columns: id, username, avatar
-                    'user:id,username,avatar',
+                    'user:id,username,full_name,avatar',
 
                     // Eager Load the replies, which is the custom relationship name
                     'replies' => function ($query) {
