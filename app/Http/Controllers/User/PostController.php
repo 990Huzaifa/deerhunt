@@ -801,7 +801,7 @@ class PostController extends Controller
                     // Eager Load the replies, which is the custom relationship name
                     'replies' => function ($query) {
                         // Eager load the user for each reply as well
-                        $query->where('is_delete', false)->with('user:id,username,avatar');
+                        $query->where('is_delete', false)->with('user:id,username,full_name,avatar');
                     },
                 ])
                 ->latest('created_at') // Order by latest comment
