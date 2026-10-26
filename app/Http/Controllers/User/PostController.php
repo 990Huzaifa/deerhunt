@@ -16,6 +16,7 @@ use Illuminate\Database\QueryException;
 use App\Models\PostView;
 use App\Models\PostLike;
 use App\Models\PostComment;
+use App\Services\EngagementTrackingService;
 use App\Services\NotificationService;
 
 class PostController extends Controller
@@ -25,9 +26,14 @@ class PostController extends Controller
      */
     // connect firebase service
     protected $notificationService;
-    public function __construct(NotificationService $notificationService)
-    {
+    protected EngagementTrackingService $engagementTracking;
+
+    public function __construct(
+        NotificationService $notificationService,
+        EngagementTrackingService $engagementTracking
+    ) {
         $this->notificationService = $notificationService;
+        $this->engagementTracking = $engagementTracking;
     }
 
 
@@ -268,6 +274,7 @@ class PostController extends Controller
             'is_trophy' => $isRecent ? false : true,
         ]);
         $user->increment('analysis_count');
+        $this->engagementTracking->recordScore($user);
 
         if(isset($request->ref_data)){
             $ref_data = $request->ref_data;
@@ -940,6 +947,7 @@ class PostController extends Controller
             'is_trophy' => $is_trophy,
         ]);
         $user->increment('analysis_count');
+        $this->engagementTracking->recordScore($user);
 
         if(isset($request->ref_data)){
             $ref_data = $request->ref_data;

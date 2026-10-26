@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use App\Services\BrevoService;
+use App\Services\EngagementTrackingService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
 use Str;
@@ -22,6 +23,13 @@ use Str;
 
 class AuthController extends Controller
 {
+    protected EngagementTrackingService $engagementTracking;
+
+    public function __construct(EngagementTrackingService $engagementTracking)
+    {
+        $this->engagementTracking = $engagementTracking;
+    }
+
     public function signin(Request $request): JsonResponse
     {
         try{
@@ -49,6 +57,8 @@ class AuthController extends Controller
                 'device_id' => $request->device_id,
                 'app_version' => $request->app_version ?? null
             ]);
+
+            $this->engagementTracking->recordLogin($user);
 
             return response()->json(['token' => $token,'user' => $user], 200);
         }catch(Exception $e){
@@ -198,6 +208,9 @@ class AuthController extends Controller
                 'last_login_at' => now(),
             ]);
             DB::commit();
+
+            $this->engagementTracking->recordLogin($user);
+
             return response()->json(['token' => $token,'user' => $user,'already_registered' => $already_registered], 200);
         }catch(QueryException $e){
             DB::rollBack();
@@ -236,6 +249,9 @@ class AuthController extends Controller
 
 
             $user->update(['last_login_at' => now(), 'fcm_token' => $fcm_token]);
+
+            $this->engagementTracking->recordLogin($user);
+
             return response()->json(['token' => $token,'user' => $user], 200);
 
         }catch(Exception $e){

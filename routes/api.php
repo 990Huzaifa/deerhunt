@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use App\Http\Controllers\BotController;
 use App\Http\Controllers\User\AuthController;
+use App\Http\Controllers\User\EngagementController;
 use App\Http\Controllers\User\HeatMapController;
 use App\Http\Controllers\User\HomeController;
 use App\Http\Controllers\User\NotificationController;
@@ -138,6 +139,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('notification/mark-as-read/{id}', [NotificationController::class, 'markAsRead']);
         Route::delete('notification/{id}', [NotificationController::class, 'destroy']);
 
+        Route::get('engagement', [EngagementController::class, 'show']);
+        Route::post('engagement/paywall-dismiss', [EngagementController::class, 'dismissPaywall']);
+        Route::post('engagement/feature-used', [EngagementController::class, 'featureUsed']);
 
         // premium subscription
         Route::post('google/verify-premium', [PremiumController::class, 'verifyGoogle']);

@@ -133,4 +133,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(Post::class, 'user_id', 'id');
     }
+
+    public function engagement()
+    {
+        return $this->hasOne(UserEngagement::class, 'user_id', 'id');
+    }
 }
