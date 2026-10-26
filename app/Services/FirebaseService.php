@@ -35,12 +35,7 @@ class FirebaseService
                 ->withData($data);
 
             $result = $messaging->send($message);
-            
-            Log::info('FCM notification sent successfully', [
-                'token' => $fcmToken,
-                'result' => $result
-            ]);
-            
+
             return [
                 'success' => true,
                 'result' => $result
@@ -72,13 +67,7 @@ class FirebaseService
                 ->withData($data);
 
             $result = $messaging->sendMulticast($message, $fcmTokens);
-            
-            Log::info('FCM multicast notification sent', [
-                'tokens_count' => count($fcmTokens),
-                'success_count' => $result->successes()->count(),
-                'failure_count' => $result->failures()->count()
-            ]);
-            
+
             return [
                 'success' => true,
                 'result' => $result,

@@ -10,11 +10,11 @@ use Throwable;
 
 class EngagementEmailService
 {
-    protected MailService $mailService;
+    protected MailingApiService $mailingApi;
 
-    public function __construct(MailService $mailService)
+    public function __construct(MailingApiService $mailingApi)
     {
-        $this->mailService = $mailService;
+        $this->mailingApi = $mailingApi;
     }
 
     /**
@@ -32,12 +32,17 @@ class EngagementEmailService
             ? 'Ready for your next RackScore?'
             : 'Still waiting on your first RackScore';
 
-        $bodyHtml = $this->mailService->renderTemplate(
+        $bodyHtml = $this->mailingApi->renderTemplate(
             'score-reminder-email',
             $this->reminderTemplateData($user, $reminderType)
         );
 
-        $this->mailService->sendEmail($user->email, $subject, $bodyHtml);
+        $this->mailingApi->send(
+            $user->email,
+            $subject,
+            $bodyHtml,
+            $user->full_name ?: $user->username ?: 'Hunter'
+        );
 
         return true;
     }
@@ -51,15 +56,16 @@ class EngagementEmailService
             return false;
         }
 
-        $bodyHtml = $this->mailService->renderTemplate(
+        $bodyHtml = $this->mailingApi->renderTemplate(
             'score-ready-email',
             $this->scoreReadyTemplateData($user)
         );
 
-        $this->mailService->sendEmail(
+        $this->mailingApi->send(
             $user->email,
             'Your RackScore is waiting 👀',
-            $bodyHtml
+            $bodyHtml,
+            $user->full_name ?: $user->username ?: 'Hunter'
         );
 
         return true;
@@ -152,10 +158,6 @@ class EngagementEmailService
                 $engagement->score_ready_email_sent_at = now();
                 $engagement->save();
                 $sent++;
-
-                Log::info('Score ready email sent', [
-                    'user_id' => $user->id,
-                ]);
             } catch (Throwable $e) {
                 Log::error('Score ready email failed', [
                     'user_id' => $user->id,
@@ -206,11 +208,6 @@ class EngagementEmailService
                 $engagement->first_score_reminder_sent_at = now();
             }
             $engagement->save();
-
-            Log::info('Score reminder email sent', [
-                'user_id' => $user->id,
-                'type' => $reminderType,
-            ]);
 
             return true;
         } catch (Throwable $e) {

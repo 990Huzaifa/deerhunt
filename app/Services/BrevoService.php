@@ -44,12 +44,6 @@ class BrevoService
         ];
 
         try {
-            Log::info('Brevo registerContact: starting', [
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'list_id' => $listId,
-            ]);
-
             $response = Http::withHeaders([
                 'accept' => 'application/json',
                 'api-key' => $apiKey,
@@ -71,14 +65,6 @@ class BrevoService
                     'response' => $response->json(),
                 ];
             }
-
-            Log::info('Brevo registerContact: success', [
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'list_id' => $listId,
-                'status' => $response->status(),
-                'response' => $response->json(),
-            ]);
 
             return [
                 'success' => true,
@@ -245,13 +231,6 @@ class BrevoService
         ];
 
         try {
-            Log::info('Brevo sendWelcomeEmail: starting', [
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'template_id' => $templateId,
-                'from_email' => $fromEmail,
-            ]);
-
             $response = Http::withHeaders([
                 'accept' => 'application/json',
                 'api-key' => $apiKey,
@@ -259,14 +238,6 @@ class BrevoService
             ])->post($this->apiUrl, $payload);
 
             if ($response->successful()) {
-                Log::info('Brevo sendWelcomeEmail: success', [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                    'template_id' => $templateId,
-                    'status' => $response->status(),
-                    'response' => $response->json(),
-                ]);
-
                 return [
                     'success' => true,
                     'template_id' => $templateId,

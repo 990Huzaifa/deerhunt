@@ -220,7 +220,7 @@ class PaymentController extends Controller
                 return $response->json();
             } else {
                 // API error (e.g., token invalid, not found)
-                Log::warning("Google Verification Failed: " . $response->body());
+                Log::error("Google Verification Failed: " . $response->body());
                 return  null;
             }
         } catch (Exception $e) {
@@ -276,7 +276,6 @@ class PaymentController extends Controller
             $purchaseToken = $request->input('token');
             $verificationData = $this->verifyFromGoogle($purchaseToken, $parentId);
             if(!$verificationData) return response()->json(['error' => 'Invalid Purchase'], 400);
-            Log::info('Google Verification Data: ' . json_encode($verificationData));
             $account_id = $verificationData['obfuscatedExternalAccountId']  ?? $user->id;
             $filterData = [
                 "start"=> $verificationData['startTimeMillis'],
@@ -382,7 +381,7 @@ class PaymentController extends Controller
                 return $response->json();
             } else {
                 // API error (e.g., token invalid, not found)
-                Log::warning("Google Verification Failed: " . $response->body());
+                Log::error("Google Verification Failed: " . $response->body());
                 return  null;
             }
             

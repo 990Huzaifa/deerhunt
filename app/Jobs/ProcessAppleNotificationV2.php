@@ -12,10 +12,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
-
-
-
 class ProcessAppleNotificationV2 implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -43,7 +39,6 @@ class ProcessAppleNotificationV2 implements ShouldQueue
         // this has to be pars from JWS
         $signedTransactionInfo = $data['signedTransactionInfo'];
         $decodedTransactionInfo = $auth->JWSParse($signedTransactionInfo);
-        Log::info('Decoded Notification:', ['transactionInfo' => $decodedTransactionInfo,'notification' => $decodedNotification]);
         // update logic here
 
         $planConfig = [

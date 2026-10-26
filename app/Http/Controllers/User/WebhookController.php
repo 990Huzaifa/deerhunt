@@ -55,7 +55,7 @@ class WebhookController extends Controller
         $authHeader = $request->header('Authorization');
 
         if (!$expectedAuth || $authHeader !== $expectedAuth) {
-            Log::warning('RevenueCat webhook unauthorized', [
+            Log::error('RevenueCat webhook unauthorized', [
                 'has_auth_header' => (bool) $authHeader,
             ]);
             return response()->json(['error' => 'Unauthorized'], 401);

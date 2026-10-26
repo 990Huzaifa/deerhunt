@@ -47,7 +47,7 @@ class ProcessGoogleNotification implements ShouldQueue
                 }elseif (isset($notification['voidedPurchaseNotification'])) {
                     $this->handleVoidedPurchaseNotification($notification);
                 } else {
-                    Log::warning('RTDN Job: Unhandled Notification Type.', $notification);
+                    Log::error('RTDN Job: Unhandled Notification Type.', $notification);
                 }
         } catch (Exception $e) {
             // This will ensure the job fails and can be retried if necessary,
@@ -64,9 +64,6 @@ class ProcessGoogleNotification implements ShouldQueue
 
     protected function handleTestNotification(array $notification)
     {
-        Log::info('RTDN Job: Test Notification successfully confirmed.', [
-            'package' => $notification['packageName']
-        ]);
         // No further action is usually required for a test.
     }
 
@@ -82,12 +79,6 @@ class ProcessGoogleNotification implements ShouldQueue
         $orderId = $data['orderId'] ?? 'N/A';
         $orderDetails = $this->getOrderDetails($orderId);
         $productId = $orderDetails['lineItems'][0]['subscriptionDetails']['basePlanId'] ?? null;
-        Log::info("RTDN Job: Subscription event received.", [
-            'type_code' => $type,
-            'orderId' => $orderId,
-            'basePlanId' => $productId,
-            'data'=> $data
-        ]);
 
         $filterData = [
             "start"=> $data['startTimeMillis'],
@@ -141,13 +132,6 @@ class ProcessGoogleNotification implements ShouldQueue
         //                             ->where('platform', 'google')
         //                             ->first();
 
-        Log::info("RTDN Job: Voided Purchase event received (Refund/Revoke).", [
-            'purchaseToken' => $purchaseToken,
-            'orderId' => $orderId,
-            // The refundType is also available in this notification if needed for logging:
-            // 'refundType' => $voidNotification['refundType'] ?? 'N/A', 
-        ]);
-
         // 2. Process the refund/void action
         // if ($subscription) {
             
@@ -172,7 +156,7 @@ class ProcessGoogleNotification implements ShouldQueue
         // } else {
         //     // Handle case where it might be a voided one-time product or a subscription 
         //     // that wasn't properly tracked/created initially.
-        //     Log::warning("RTDN Job: Voided Purchase Token not found in database.", [
+        //     Log::error("RTDN Job: Voided Purchase Token not found in database.", [
         //         'purchaseToken' => $purchaseToken,
         //         'orderId' => $orderId,
         //     ]);
@@ -207,7 +191,7 @@ class ProcessGoogleNotification implements ShouldQueue
                 return $response->json();
             } else {
                 // API error (e.g., token invalid, not found)
-                Log::warning("Google Verification Failed: " . $response->body());
+                Log::error("Google Verification Failed: " . $response->body());
                 return  null;
             }
         } catch (Exception $e) {
@@ -265,7 +249,7 @@ class ProcessGoogleNotification implements ShouldQueue
                 return $response->json();
             } else {
                 // API error (e.g., token invalid, not found)
-                Log::warning("Google Verification Failed: " . $response->body());
+                Log::error("Google Verification Failed: " . $response->body());
                 return  null;
             }
         } catch (Exception $e) {

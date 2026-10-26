@@ -52,6 +52,13 @@ return [
         'timeout' => env('MAIL_SERVICE_TIMEOUT', 20),
     ],
 
+    'mailing_api' => [
+        'url' => env('MAILING_API_URL', 'https://mailingapi.techvince.com/send-email'),
+        'api_key' => env('MAILING_API_KEY'),
+        'from_email' => env('MAILING_API_FROM_EMAIL', 'info@rackscore.us'),
+        'timeout' => env('MAILING_API_TIMEOUT', 20),
+    ],
+
     'brevo' => [
         'api_key' => env('BREVO_API_KEY'),
         'list_id' => (int) env('BREVO_LIST_ID', 3),

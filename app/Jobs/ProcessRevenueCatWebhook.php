@@ -28,20 +28,19 @@ class ProcessRevenueCatWebhook implements ShouldQueue
         $event = $this->payload['event'] ?? $this->payload;
 
         if (!is_array($event) || empty($event['type'])) {
-            Log::warning('RevenueCat webhook missing event type', ['payload' => $this->payload]);
+            Log::error('RevenueCat webhook missing event type', ['payload' => $this->payload]);
             return;
         }
 
         $type = strtoupper((string) $event['type']);
 
         if ($type === 'TEST') {
-            Log::info('RevenueCat TEST event received');
             return;
         }
 
         $user = $this->resolveUser($event);
         if (!$user) {
-            Log::warning('RevenueCat webhook: user not found', [
+            Log::error('RevenueCat webhook: user not found', [
                 'app_user_id' => $event['app_user_id'] ?? null,
                 'type' => $type,
             ]);
@@ -77,7 +76,7 @@ class ProcessRevenueCatWebhook implements ShouldQueue
             case 'PRODUCT_CHANGE':
             case 'NON_RENEWING_PURCHASE':
                 if (!$plan) {
-                    Log::warning('RevenueCat webhook: unsupported plan', [
+                    Log::error('RevenueCat webhook: unsupported plan', [
                         'product_id' => $productId,
                         'user_id' => $user->id,
                         'type' => $type,
@@ -105,7 +104,7 @@ class ProcessRevenueCatWebhook implements ShouldQueue
 
             case 'CANCELLATION':
                 if (!$subscription) {
-                    Log::warning('RevenueCat CANCELLATION: subscription not found', [
+                    Log::error('RevenueCat CANCELLATION: subscription not found', [
                         'user_id' => $user->id,
                         'transaction_id' => $transactionId,
                     ]);
@@ -120,7 +119,7 @@ class ProcessRevenueCatWebhook implements ShouldQueue
 
             case 'EXPIRATION':
                 if (!$subscription) {
-                    Log::warning('RevenueCat EXPIRATION: subscription not found', [
+                    Log::error('RevenueCat EXPIRATION: subscription not found', [
                         'user_id' => $user->id,
                         'transaction_id' => $transactionId,
                     ]);
@@ -133,7 +132,6 @@ class ProcessRevenueCatWebhook implements ShouldQueue
                 break;
 
             default:
-                Log::info('RevenueCat event ignored', ['type' => $type]);
                 break;
         }
     }

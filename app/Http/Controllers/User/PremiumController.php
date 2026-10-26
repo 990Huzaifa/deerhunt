@@ -58,7 +58,6 @@ class PremiumController extends Controller
 
             $verificationData = $this->verifyFromGoogle($purchaseToken, $parentId);
             if(!$verificationData) return response()->json(['error' => 'Invalid Purchase'], 400);
-            Log::info('Premium Google Verification Data: ' . json_encode($verificationData));
             $account_id = $verificationData['obfuscatedExternalAccountId']  ?? $user->id;
             $filterData = [
                 "start"=> $verificationData['startTimeMillis'],
@@ -147,7 +146,7 @@ class PremiumController extends Controller
                 return $response->json();
             } else {
                 // API error (e.g., token invalid, not found)
-                Log::warning("Premium Google Verification Failed: " . $response->body());
+                Log::error("Premium Google Verification Failed: " . $response->body());
                 return  null;
             }
         } catch (Exception $e) {
