@@ -26,6 +26,9 @@ class UserEngagement extends Model
         'first_login_at',
         'first_score_at',
         'second_score_at',
+        'first_score_reminder_sent_at',
+        'second_score_reminder_sent_at',
+        'score_ready_email_sent_at',
         'trial_paywall_dismissed_at',
         'feature_usage',
     ];
@@ -34,6 +37,9 @@ class UserEngagement extends Model
         'first_login_at' => 'datetime',
         'first_score_at' => 'datetime',
         'second_score_at' => 'datetime',
+        'first_score_reminder_sent_at' => 'datetime',
+        'second_score_reminder_sent_at' => 'datetime',
+        'score_ready_email_sent_at' => 'datetime',
         'trial_paywall_dismissed_at' => 'datetime',
         'feature_usage' => 'array',
     ];
