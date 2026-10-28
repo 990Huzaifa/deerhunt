@@ -93,7 +93,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('v3/post',[PostController::class,'storeV3']);
         Route::post('p2p/{id}',[PostController::class,'P2P']);
         Route::put('delete-post/{id}',[PostController::class,'deletePost']);
-        
 
         Route::get('posts-like/{id}',[PostController::class,'postLike']);
         Route::get('posts-share/{id}',[PostController::class,'postShare']);
@@ -121,7 +120,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
         });
         Route::apiResource('lead', LeadController::class)->only(['index', 'store', 'update']);
         Route::get('lead-show', [LeadController::class, 'show']);
-
 
         Route::post('verify-payment', [PaymentController::class, 'verifyApple']);
         Route::post('google/verify-payment', [PaymentController::class, 'verifyGoogle']);
