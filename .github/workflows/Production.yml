@@ -27,6 +27,7 @@ jobs:
           local-dir: ./
           server-dir: /
           exclude: |
+            **/node_modules/**
             **/.env
             vendor/*
             resources/views/*
