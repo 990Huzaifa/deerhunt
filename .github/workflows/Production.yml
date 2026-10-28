@@ -17,24 +17,22 @@ jobs:
         run: rm -rf .git
 
       - name: Sync files
-        uses: SamKirkland/FTP-Deploy-Action@4.0.0
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          port: 21
           protocol: ftps
+          port: 21
           server-dir: /
+          log-level: verbose
+          timeout: 120000
           exclude: |
+            **/.git/**
+            **/.github/**
             **/node_modules/**
             **/.env
-            vendor/*
-            resources/views/*
-            bootstrap/cache/*
-            public/*
-            tests/*
-            .git-ftp-*
-            *.md
-            composer.json
-            package.json
-            composer.lock
+            **/vendor/**
+            **/storage/**
+            **/bootstrap/cache/**
+            **/tests/**
