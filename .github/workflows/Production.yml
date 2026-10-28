@@ -23,7 +23,7 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
-          server-dir: var/www/rackscore.techvince.com/
+          server-dir: ./
           exclude: |
             **/node_modules/**
             **/.env
