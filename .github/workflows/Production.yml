@@ -22,7 +22,7 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /deerhunt.techvince.com/
+          server-dir: var/www/rackscore.techvince.com/
           exclude: |
             **/node_modules/**
             **/.env
