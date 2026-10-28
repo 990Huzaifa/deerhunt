@@ -68,7 +68,6 @@ class HomeController extends Controller
                 ->where('posts.user_id', $user->id)
                 ->where('posts.is_delete', false)
                 ->where('posts.ref_id', null)
-                ->where('posts.is_public', false)
                 ->excludeRescoreVersions()
                 ->paginate(200);
             return response()->json($posts);
