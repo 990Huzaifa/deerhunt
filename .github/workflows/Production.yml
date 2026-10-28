@@ -23,7 +23,6 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
-          dangerous-allow-insecure-tls: true
           server-dir: ./
           exclude: |
             **/node_modules/**
