@@ -608,6 +608,11 @@ class PostController extends Controller
                 'notes' => 'nullable',
                 'is_trophy' => 'nullable|in:true,false,1,0',
                 'is_public' => 'nullable|in:true,false,1,0',
+                'caption' => 'nullable',
+                'harvest_type' => 'nullable|string',
+                'state' => 'nullable|string',
+                'county' => 'nullable|string',
+                'notes' => 'nullable',
             ], [
                 'title.required' => 'Title is required',
             ]);
@@ -618,6 +623,8 @@ class PostController extends Controller
                 'state' => $request->state ?? $post->state,
                 'county' => $request->county ?? $post->county,
                 'notes' => $request->notes ?? $post->notes,
+                'caption' => $request->caption ?? $post->caption,
+                'harvest_type' => $request->harvest_type ?? $post->harvest_type,
             ];
 
             // New logic only when BOTH is_trophy and is_public are sent as true/false
@@ -725,6 +732,40 @@ class PostController extends Controller
             if (!$post) throw new Exception('Post not found', 404);
             if ($post->user_id != $user->id) throw new Exception('Unauthorized', 403);
             $post->is_delete = true;
+            $post->save();
+            return response()->json(['message' => 'Post deleted'], 200);
+        } catch (QueryException $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
+    }
+    
+    public function deletePost(Request $request, string $id): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $post = Post::find($id);
+            if (!$post) throw new Exception('Post not found', 404);
+            if ($post->user_id != $user->id) throw new Exception('Unauthorized', 403);
+            // we have 3 query params private, public, all
+            $private = $request->query('private');
+            $public = $request->query('public');
+            $all = $request->query('all');
+            if($private){
+                $post->is_private = 0;
+                $post->is_trophy = 0;
+            }
+            if($public){
+                $post->is_public = 0;
+            }
+            if($all){
+                $post->is_private = 0;
+                $post->is_trophy = 0;
+                $post->is_public = 0;
+                $post->is_delete = 1;
+            }
+
             $post->save();
             return response()->json(['message' => 'Post deleted'], 200);
         } catch (QueryException $e) {
@@ -980,93 +1021,6 @@ class PostController extends Controller
         return $post->fresh();
     }
 
-    public function P2P($id, Request $request): JsonResponse
-    {
-        try{
-            $user = Auth::user();
-            $validator = Validator::make($request->all(), [
-                'is_public' => 'nullable|boolean',
-                'is_private' => 'nullable|boolean',
-                'caption' => 'nullable',
-                'harvest_type' => 'nullable|string',
-                'state' => 'nullable|string',
-                'title' => 'nullable|string',
-                'county' => 'nullable|string',
-                'feed_images' => 'nullable|array',
-                'feed_images.*' => 'file|image|mimes:jpeg,png,jpg,gif,svg,heic,heif,image/heic,image/heif',
-            ], [
-            ]);
-            if ($validator->fails()) throw new Exception($validator->errors()->first(),400);
-            $post = Post::find($id);
-            if(!$request) throw new Exception('Post not found',404);
-
-            
-            if($post->is_public != true){
-                if ($request->hasFile('feed_images')) {
-                    $paths = [];
-                    $uploadedImages = $request->file('feed_images');
-
-                    foreach ($uploadedImages as $image) {
-                        $uploadedImage = uploadImageToPublic(
-                            $image,
-                            'post-image',
-                            'post-image'
-                        );
-                        $paths[] = $uploadedImage['path'];
-                    }
-                    $images = implode(',', $paths);
-
-                    $post->update([
-                        'feed_images' => $images,
-                    ]);
-                }                
-            }
-
-
-            $post->update([
-                'title' => $request->title ?? null,
-                'is_private' => $request->is_private ?? false,
-                'is_trophy' => true,
-                'is_public' => $request->is_public ?? false,
-                'caption' => $request->caption ?? null,
-                'harvest_type' => $request->harvest_type ?? null,
-                'state' =>  $request->state ?? $post->state ?? $user->state,
-                'county' => $request->county ?? $post->county ?? $user->county,
-                'created_at' => now(),
-            ]);
-
-            // get feed_images size and make its array and sent in api response here.. code
-
-            $feedImagesArray = [];
-
-            if (!empty($post->feed_images)) {
-                $images = explode(',', $post->feed_images);
-
-                foreach ($images as $path) {
-                    // $fullPath = public_path($path);
-
-                    // if (file_exists($fullPath)) {
-                        $feedImagesArray[] = [
-                            'path' => $path,
-                            // 'size' => filesize($fullPath), // bytes
-                            // 'size_kb' => round(filesize($fullPath) / 1024, 2),
-                            // 'size_mb' => round(filesize($fullPath) / (1024 * 1024), 2),
-                        ];
-                    // }
-                }
-            }
-
-            
-
-            return response()->json(['message' => 'Post updated successfully', 'post' => $post, 'feed_images' => $feedImagesArray],200);
-
-        } catch (QueryException $e) {
-            return response()->json(['DB error' => $e->getMessage()], 500);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
-        }
-    }
-
     public function bulkDelete(Request $request): JsonResponse
     {
         try {
@@ -1097,43 +1051,6 @@ class PostController extends Controller
         }
     }
 
-    public function delete($id): JsonResponse
-    {
-        try {
-            $user = Auth::user();
-
-            $validator = Validator::make(request()->all(), [
-                'type' => 'required|in:delete,public,private',
-            ],[
-                'type.required' => 'Type is required',
-                'type.in' => 'Type must be one of the following: delete, public, private',
-            ]);
-            if ($validator->fails()) throw new Exception($validator->errors()->first(),400);
-
-            $type = request()->input('type');
-            $post = Post::where('id', $id)->where('user_id', $user->id)->first();
-            if (!$post) throw new Exception('Post not found', 404);
-            if ($type === 'delete') {
-                $post->update(['is_delete' => true, 'is_public' => false, 'is_private' => false]);
-            } elseif ($type === 'public') {
-                $post->update([
-                    'is_public' => false,
-                    'is_delete' => $post->is_private ? false : true,
-                ]);
-            } elseif ($type === 'private') {
-                $post->update([
-                    'is_private' => false,
-                    'is_delete' => $post->is_public ? false : true,
-                ]);
-            }
-
-            return response()->json(['message' => 'All posts deleted successfully', 'post' => $post], 200);
-        } catch (QueryException $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
-        }
-    }
 
     public function reScore(Request $request, $id): JsonResponse
     {
