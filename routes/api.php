@@ -140,7 +140,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('notification/{id}', [NotificationController::class, 'destroy']);
 
         Route::get('engagement', [EngagementController::class, 'show']);
-        Route::post('engagement/paywall-dismiss', [EngagementController::class, 'dismissPaywall']);
+        Route::put('engagement/paywall-dismiss', [EngagementController::class, 'dismissPaywall']);
         Route::post('engagement/feature-used', [EngagementController::class, 'featureUsed']);
 
         // premium subscription
