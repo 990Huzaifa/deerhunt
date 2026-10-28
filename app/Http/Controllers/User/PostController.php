@@ -421,179 +421,6 @@ class PostController extends Controller
         }
     }
 
-    public function communityPosts(Request $request): JsonResponse
-    {
-        try {
-            $user = Auth::user();
-            $sortBy = $request->query('sort_by', 'latest');        // oldest, latest, most_liked
-
-            $search = $request->query('search');
-
-            $applySorting = function ($query) use ($sortBy) {
-                switch ($sortBy) {
-                    case 'oldest':
-                        return $query->orderBy('posts.created_at', 'asc');
-
-                    case 'most_liked':
-                        return $query->orderBy('posts.like_count', 'desc');
-
-                    case 'latest':
-                    default:
-                        return $query->orderBy('posts.created_at', 'desc');
-                }
-            };
-
-            $selectFields = [
-                'posts.created_at',
-                'posts.caption',
-                'posts.harvest_type',
-                'posts.score',
-                'posts.id',
-                'posts.state',
-                'posts.county',
-                'posts.image',
-                'posts.feed_images',
-                'posts.share_count',
-                'posts.like_count',
-                'posts.comment_count',
-                'posts.user_id',
-                'users.full_name',
-                'users.avatar',
-                'users.username',
-                'users.is_premium',
-            ];
-
-            /**
-             * Public community posts
-             */
-            $postsQuery = Post::select($selectFields)
-                ->join('users', 'users.id', '=', 'posts.user_id')
-                ->where('posts.is_delete', false)
-                ->whereNull('posts.ref_id')
-                ->excludeRescoreVersions()
-                ->where('posts.is_public', true);
-
-
-            if ($search) {
-                $postsQuery->where(function ($query) use ($search) {
-                    $query->where('users.full_name', 'like', '%' . $search . '%')
-                        ->orWhere('users.username', 'like', '%' . $search . '%');
-                });
-            }
-
-            $applySorting($postsQuery);
-
-            $posts = $postsQuery->paginate(20);
-
-            $followingQuery = Post::select($selectFields)
-                ->join('users', 'users.id', '=', 'posts.user_id')
-                ->join('follows', 'follows.following_id', '=', 'posts.user_id')
-                ->where('follows.follower_id', $user->id)
-                ->where('posts.is_delete', false)
-                ->whereNull('posts.ref_id')
-                ->excludeRescoreVersions()
-                ->where('posts.is_public', true);
-
-            
-            if ($search) {
-                $followingQuery->where(function ($query) use ($search) {
-                    $query->where('users.full_name', 'like', '%' . $search . '%')
-                        ->orWhere('users.username', 'like', '%' . $search . '%');
-                });
-            }
-
-            $applySorting($followingQuery);
-
-            $following_posts = $followingQuery->paginate(20);
-
-                    // 2. Extract Post IDs for efficient checking
-            $postIds = $posts->pluck('id')->merge($following_posts->pluck('id'))->unique();
-
-            // 3. Get all the likes for these posts by the authenticated user in one query
-            $likedPostIds = PostLike::where('user_id', $user->id)
-                                    ->whereIn('post_id', $postIds)
-                                    ->pluck('post_id');
-
-            // 4. Create the transformation function
-            $transformer = function ($post) use ($likedPostIds) {
-                // Convert to array to easily add the new field
-                $postArray = $post instanceof \Illuminate\Database\Eloquent\Model ? $post->toArray() : (array) $post;
-                
-                // Check if the post ID is in the list of liked posts
-                $postArray['is_like'] = $likedPostIds->contains($postArray['id']);
-                
-                return $postArray;
-            };
-
-            // 5. Apply the transformation to both paginated results
-            $posts->getCollection()->transform($transformer);
-            $following_posts->getCollection()->transform($transformer);
-            $posts = [
-                'feeds' => $posts,
-                'following_posts' => $following_posts
-            ];
-            return response()->json($posts);
-        } catch (QueryException $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
-        }
-    }
-
-    public function postLike(string $id): JsonResponse
-    {
-        try{
-            $user = Auth::user();
-            $post = Post::find($id);
-            if(!$post) throw new Exception('Post not found',404);
-            $check_like = PostLike::where('post_id',$id)->where('user_id',$user->id)->first();
-            if($check_like){
-                $check_like->delete();
-                $post->decrement('like_count');
-                return response()->json(['message' => 'Post unliked','like_count' => $post->like_count],200);
-            }else{
-                $post_like = PostLike::create([
-                    'post_id' => $id,
-                    'user_id' => $user->id
-                ]);
-                $post->increment('like_count');
-                // send notification
-                if($user->id != $post->user_id){
-                    $this->notificationService->send(
-                        $user->id,
-                        $post->user_id,
-                        'like',
-                        "{$user->username} liked your post.",
-                        'New Like on Your Post',
-                        ['type' => 'like', 'post_id' => $post->id, 'receiver_username' => $post->user->username]
-                    );
-                }
-
-                return response()->json(['message' => 'Post liked','like_count' => $post->like_count],200);
-            }
-        }catch(Exception $e){
-            return response()->json($e->getMessage(),500);
-        }
-    }
-
-
-    public function postShare(string $id): JsonResponse
-    {
-        try{
-            $user = Auth::user();
-            $post = Post::find($id);
-            if(!$post) throw new Exception('Post not found',404);
-                $post_share = PostShare::create([
-                    'post_id' => $id,
-                    'user_id' => $user->id
-                ]);  
-            $post->increment('share_count');
-            return response()->json(['message' => 'Post shared','share_count' => $post->share_count],200);
-        }catch(Exception $e){
-            return response()->json($e->getMessage(),500);
-        }
-    }
-
     public function saveTrophy(Request $request, string $id): JsonResponse
     {
         try{
@@ -775,101 +602,7 @@ class PostController extends Controller
         }
     }
 
-    public function postComment(Request $request, string $id): JsonResponse
-    {
-        try{
-            $user = Auth::user();
-            $post = Post::find($id);
-            if(!$post) throw new Exception('Post not found',404);
-            // if($post->user_id != $user->id) throw new Exception('Unauthorized',403);
-            $validator = Validator::make($request->all(), [
-                'comment' => 'required',
-                'parent_id' => 'nullable|exists:post_comments,id',
-            ], [
-                'comment.required' => 'Comment is required',
-                'parent_id.exists' => 'Parent comment not found',
-            ]);
-            if ($validator->fails()) throw new Exception($validator->errors()->first(),400);
-            $comment = PostComment::create([
-                'post_id' => $id,
-                'user_id' => $user->id,
-                'comment' => $request->comment,
-                'parent_id' => $request->parent_id ?? null
-            ]);
-            // send notification
-            if($user->id != $post->user_id){
-                $this->notificationService->send(
-                    $user->id,
-                    $post->user_id,
-                    'comment',
-                    "{$user->username} commented on your post.",
-                    'New Comment received',
-                    ['type' => 'comment', 'post_id' => $post->id, 'comment_id' => $comment->id, 'receiver_username' => $post->user->username]
-                );
-            }    
-            if($comment->parent_id != null){
-                // reply notification to parent comment user
-                $parentComment = PostComment::find($comment->parent_id);
-                if($parentComment && $parentComment->user_id != $user->id){
-                    $this->notificationService->send(
-                        $user->id,
-                        $parentComment->user_id,
-                        'reply',
-                        "{$user->username} replied to your comment.",
-                        'New Reply received',
-                        ['type' => 'reply', 'post_id' => $post->id, 'comment_id' => $comment->id, 'receiver_username' => $post->user->username]
-                    );
-                }
-            }
-            $post->increment('comment_count');
-            return response()->json(['message' => 'Comment send successfully' ,'data' => $comment, 'comment_count' => $post->comment_count],200);
-        }catch(Exception $e){
-            return response()->json($e->getMessage(),500);
-        }
-    }
 
-    public function postCommentList(string $id): JsonResponse
-    {
-        try {
-            $post = Post::find($id);
-            if (!$post) {
-                throw new Exception('Post not found', 404);
-            }
-
-            // Fetch only top-level comments (parent_id is NULL)
-            $comments = PostComment::where('post_id', $id)
-                ->whereNull('parent_id')
-                ->where('is_delete', false)
-                ->with([
-                    // We still need to Eager Load the 'user' relationship
-                    // for the accessors (username, avatar) to work efficiently.
-                    // We select only the necessary columns: id, username, avatar
-                    'user:id,username,full_name,avatar',
-
-                    // Eager Load the replies, which is the custom relationship name
-                    'replies' => function ($query) {
-                        // Eager load the user for each reply as well
-                        $query->where('is_delete', false)->with('user:id,username,full_name,avatar');
-                    },
-                ])
-                ->latest('created_at') // Order by latest comment
-                ->get();
-
-            // The structure of the $comments collection will now automatically
-            // include username/avatar and the nested 'replies' array
-            // because of the model changes in Step 1.
-
-            return response()->json([
-                'message' => 'Comments fetched successfully',
-                'data' => $comments
-            ], 200);
-
-        } catch (QueryException $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-    }
 
     
     // here v2
@@ -1131,6 +864,278 @@ class PostController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         } catch (Exception $e) {
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
+    }
+
+
+    // soclal
+
+    public function communityPosts(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $sortBy = $request->query('sort_by', 'latest');        // oldest, latest, most_liked
+
+            $search = $request->query('search');
+
+            $applySorting = function ($query) use ($sortBy) {
+                switch ($sortBy) {
+                    case 'oldest':
+                        return $query->orderBy('posts.created_at', 'asc');
+
+                    case 'most_liked':
+                        return $query->orderBy('posts.like_count', 'desc');
+
+                    case 'latest':
+                    default:
+                        return $query->orderBy('posts.created_at', 'desc');
+                }
+            };
+
+            $selectFields = [
+                'posts.created_at',
+                'posts.caption',
+                'posts.harvest_type',
+                'posts.score',
+                'posts.id',
+                'posts.state',
+                'posts.county',
+                'posts.image',
+                'posts.feed_images',
+                'posts.share_count',
+                'posts.like_count',
+                'posts.comment_count',
+                'posts.user_id',
+                'users.full_name',
+                'users.avatar',
+                'users.username',
+                'users.is_premium',
+            ];
+
+            /**
+             * Public community posts
+             */
+            $postsQuery = Post::select($selectFields)
+                ->join('users', 'users.id', '=', 'posts.user_id')
+                ->where('posts.is_delete', false)
+                ->whereNull('posts.ref_id')
+                ->excludeRescoreVersions()
+                ->where('posts.is_public', true);
+
+
+            if ($search) {
+                $postsQuery->where(function ($query) use ($search) {
+                    $query->where('users.full_name', 'like', '%' . $search . '%')
+                        ->orWhere('users.username', 'like', '%' . $search . '%');
+                });
+            }
+
+            $applySorting($postsQuery);
+
+            $posts = $postsQuery->paginate(20);
+
+            $followingQuery = Post::select($selectFields)
+                ->join('users', 'users.id', '=', 'posts.user_id')
+                ->join('follows', 'follows.following_id', '=', 'posts.user_id')
+                ->where('follows.follower_id', $user->id)
+                ->where('posts.is_delete', false)
+                ->whereNull('posts.ref_id')
+                ->excludeRescoreVersions()
+                ->where('posts.is_public', true);
+
+            
+            if ($search) {
+                $followingQuery->where(function ($query) use ($search) {
+                    $query->where('users.full_name', 'like', '%' . $search . '%')
+                        ->orWhere('users.username', 'like', '%' . $search . '%');
+                });
+            }
+
+            $applySorting($followingQuery);
+
+            $following_posts = $followingQuery->paginate(20);
+
+                    // 2. Extract Post IDs for efficient checking
+            $postIds = $posts->pluck('id')->merge($following_posts->pluck('id'))->unique();
+
+            // 3. Get all the likes for these posts by the authenticated user in one query
+            $likedPostIds = PostLike::where('user_id', $user->id)
+                                    ->whereIn('post_id', $postIds)
+                                    ->pluck('post_id');
+
+            // 4. Create the transformation function
+            $transformer = function ($post) use ($likedPostIds) {
+                // Convert to array to easily add the new field
+                $postArray = $post instanceof \Illuminate\Database\Eloquent\Model ? $post->toArray() : (array) $post;
+                
+                // Check if the post ID is in the list of liked posts
+                $postArray['is_like'] = $likedPostIds->contains($postArray['id']);
+                
+                return $postArray;
+            };
+
+            // 5. Apply the transformation to both paginated results
+            $posts->getCollection()->transform($transformer);
+            $following_posts->getCollection()->transform($transformer);
+            $posts = [
+                'feeds' => $posts,
+                'following_posts' => $following_posts
+            ];
+            return response()->json($posts);
+        } catch (QueryException $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
+    }
+
+    public function postLike(string $id): JsonResponse
+    {
+        try{
+            $user = Auth::user();
+            $post = Post::find($id);
+            if(!$post) throw new Exception('Post not found',404);
+            $check_like = PostLike::where('post_id',$id)->where('user_id',$user->id)->first();
+            if($check_like){
+                $check_like->delete();
+                $post->decrement('like_count');
+                return response()->json(['message' => 'Post unliked','like_count' => $post->like_count],200);
+            }else{
+                $post_like = PostLike::create([
+                    'post_id' => $id,
+                    'user_id' => $user->id
+                ]);
+                $post->increment('like_count');
+                // send notification
+                if($user->id != $post->user_id){
+                    $this->notificationService->send(
+                        $user->id,
+                        $post->user_id,
+                        'like',
+                        "{$user->username} liked your post.",
+                        'New Like on Your Post',
+                        ['type' => 'like', 'post_id' => $post->id, 'receiver_username' => $post->user->username]
+                    );
+                }
+
+                return response()->json(['message' => 'Post liked','like_count' => $post->like_count],200);
+            }
+        }catch(Exception $e){
+            return response()->json($e->getMessage(),500);
+        }
+    }
+
+
+    public function postShare(string $id): JsonResponse
+    {
+        try{
+            $user = Auth::user();
+            $post = Post::find($id);
+            if(!$post) throw new Exception('Post not found',404);
+                $post_share = PostShare::create([
+                    'post_id' => $id,
+                    'user_id' => $user->id
+                ]);  
+            $post->increment('share_count');
+            return response()->json(['message' => 'Post shared','share_count' => $post->share_count],200);
+        }catch(Exception $e){
+            return response()->json($e->getMessage(),500);
+        }
+    }
+
+    public function postComment(Request $request, string $id): JsonResponse
+    {
+        try{
+            $user = Auth::user();
+            $post = Post::find($id);
+            if(!$post) throw new Exception('Post not found',404);
+            // if($post->user_id != $user->id) throw new Exception('Unauthorized',403);
+            $validator = Validator::make($request->all(), [
+                'comment' => 'required',
+                'parent_id' => 'nullable|exists:post_comments,id',
+            ], [
+                'comment.required' => 'Comment is required',
+                'parent_id.exists' => 'Parent comment not found',
+            ]);
+            if ($validator->fails()) throw new Exception($validator->errors()->first(),400);
+            $comment = PostComment::create([
+                'post_id' => $id,
+                'user_id' => $user->id,
+                'comment' => $request->comment,
+                'parent_id' => $request->parent_id ?? null
+            ]);
+            // send notification
+            if($user->id != $post->user_id){
+                $this->notificationService->send(
+                    $user->id,
+                    $post->user_id,
+                    'comment',
+                    "{$user->username} commented on your post.",
+                    'New Comment received',
+                    ['type' => 'comment', 'post_id' => $post->id, 'comment_id' => $comment->id, 'receiver_username' => $post->user->username]
+                );
+            }    
+            if($comment->parent_id != null){
+                // reply notification to parent comment user
+                $parentComment = PostComment::find($comment->parent_id);
+                if($parentComment && $parentComment->user_id != $user->id){
+                    $this->notificationService->send(
+                        $user->id,
+                        $parentComment->user_id,
+                        'reply',
+                        "{$user->username} replied to your comment.",
+                        'New Reply received',
+                        ['type' => 'reply', 'post_id' => $post->id, 'comment_id' => $comment->id, 'receiver_username' => $post->user->username]
+                    );
+                }
+            }
+            $post->increment('comment_count');
+            return response()->json(['message' => 'Comment send successfully' ,'data' => $comment, 'comment_count' => $post->comment_count],200);
+        }catch(Exception $e){
+            return response()->json($e->getMessage(),500);
+        }
+    }
+
+    public function postCommentList(string $id): JsonResponse
+    {
+        try {
+            $post = Post::find($id);
+            if (!$post) {
+                throw new Exception('Post not found', 404);
+            }
+
+            // Fetch only top-level comments (parent_id is NULL)
+            $comments = PostComment::where('post_id', $id)
+                ->whereNull('parent_id')
+                ->where('is_delete', false)
+                ->with([
+                    // We still need to Eager Load the 'user' relationship
+                    // for the accessors (username, avatar) to work efficiently.
+                    // We select only the necessary columns: id, username, avatar
+                    'user:id,username,full_name,avatar',
+
+                    // Eager Load the replies, which is the custom relationship name
+                    'replies' => function ($query) {
+                        // Eager load the user for each reply as well
+                        $query->where('is_delete', false)->with('user:id,username,full_name,avatar');
+                    },
+                ])
+                ->latest('created_at') // Order by latest comment
+                ->get();
+
+            // The structure of the $comments collection will now automatically
+            // include username/avatar and the nested 'replies' array
+            // because of the model changes in Step 1.
+
+            return response()->json([
+                'message' => 'Comments fetched successfully',
+                'data' => $comments
+            ], 200);
+
+        } catch (QueryException $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 }
