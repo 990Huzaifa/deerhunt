@@ -43,6 +43,9 @@ class PostController extends Controller
             // search query
             $search = $request->query('search');
 
+            $page = $request->query('page', 1);
+            $perPage = $request->query('per_page', 200);
+
             $user = Auth::user();
             $posts = Post::select('posts.*', 'users.full_name', 'users.avatar')
                 ->join('users', 'users.id', '=', 'posts.user_id')->orderBy('created_at', 'desc')
@@ -55,7 +58,7 @@ class PostController extends Controller
                 ->where(function ($query) use ($search) {
                     $query->where('posts.title', 'like', '%' . $search . '%');
                 })
-                ->paginate(200);
+                ->paginate($perPage, ['*'], 'page', $page);
             return response()->json($posts);
         } catch (QueryException $e) {
             return response()->json(['DB error' => $e->getMessage()], 500);
@@ -92,13 +95,16 @@ class PostController extends Controller
             $search = $request->query('search');
             $user = Auth::user();
 
+            $page = $request->query('page', 1);
+            $perPage = $request->query('per_page', 200);
+
             $posts = Post::select('posts.*', 'users.full_name', 'users.avatar')
                 ->join('users', 'users.id', '=', 'posts.user_id')
                 ->orderBy('posts.created_at', 'desc')
                 ->where('posts.user_id', $user->id)
                 ->where('posts.is_delete', false)
                 ->where('ref_id', null)
-                ->paginate(200);
+                ->paginate($perPage, ['*'], 'page', $page);
 
             return response()->json($posts);
         } catch (QueryException $e) {
@@ -878,6 +884,9 @@ class PostController extends Controller
 
             $search = $request->query('search');
 
+            $page = $request->query('page', 1);
+            $perPage = $request->query('per_page', 200);
+
             $applySorting = function ($query) use ($sortBy) {
                 switch ($sortBy) {
                     case 'oldest':
@@ -932,7 +941,7 @@ class PostController extends Controller
 
             $applySorting($postsQuery);
 
-            $posts = $postsQuery->paginate(20);
+            $posts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
 
             $followingQuery = Post::select($selectFields)
                 ->join('users', 'users.id', '=', 'posts.user_id')
@@ -953,7 +962,7 @@ class PostController extends Controller
 
             $applySorting($followingQuery);
 
-            $following_posts = $followingQuery->paginate(20);
+            $following_posts = $followingQuery->paginate($perPage, ['*'], 'page', $page);
 
                     // 2. Extract Post IDs for efficient checking
             $postIds = $posts->pluck('id')->merge($following_posts->pluck('id'))->unique();
@@ -1096,10 +1105,14 @@ class PostController extends Controller
         }
     }
 
-    public function postCommentList(string $id): JsonResponse
+    public function postCommentList(Request $request, string $id): JsonResponse
     {
         try {
             $post = Post::find($id);
+
+            $page = $request->query('page', 1);
+            $perPage = $request->query('per_page', 200);
+
             if (!$post) {
                 throw new Exception('Post not found', 404);
             }
@@ -1121,7 +1134,7 @@ class PostController extends Controller
                     },
                 ])
                 ->latest('created_at') // Order by latest comment
-                ->get();
+                ->paginate($perPage, ['*'], 'page', $page);
 
             // The structure of the $comments collection will now automatically
             // include username/avatar and the nested 'replies' array

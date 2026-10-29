@@ -63,13 +63,16 @@ class HomeController extends Controller
         try{
             $user = Auth::user();
 
+            $page = $request->query('page', 1);
+            $perPage = $request->query('per_page', 200);
+
             $posts = Post::select('posts.*', 'users.full_name', 'users.avatar')
                 ->join('users', 'users.id', '=', 'posts.user_id')->orderBy('created_at', 'desc')
                 ->where('posts.user_id', $user->id)
                 ->where('posts.is_delete', false)
                 ->where('posts.ref_id', null)
                 ->excludeRescoreVersions()
-                ->paginate(200);
+                ->paginate($perPage, ['*'], 'page', $page);
             return response()->json($posts);
         }catch(QueryException $e){
             return response()->json(['error' => $e->getMessage()], 500);
@@ -81,16 +84,19 @@ class HomeController extends Controller
     }
 
 
-    public function leaderboard():JsonResponse
+    public function leaderboard(Request $request):JsonResponse
     {
         try{
+            $page = $request->query('page', 1);
+            $perPage = $request->query('per_page', 200);
+
             $leaderboard = Post::select('posts.*', 'users.full_name', 'users.avatar')
                 ->join('users', 'users.id', '=', 'posts.user_id')->orderBy('posts.score', 'desc')
                 ->where('posts.is_delete', false)
                 ->where('posts.ref_id', null)
                 ->where('posts.is_trophy', true)
                 ->excludeRescoreVersions()
-                ->paginate(200);
+                ->paginate($perPage, ['*'], 'page', $page);
             return response()->json($leaderboard);
         }catch(QueryException $e){
             return response()->json(['error' => $e->getMessage()], 500);

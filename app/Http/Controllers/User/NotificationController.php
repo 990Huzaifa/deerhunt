@@ -12,11 +12,13 @@ use App\Models\Notification;
 
 class NotificationController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         try{
-            $user = Auth::user();
-            $notifications =Notification::where('receiver_id', $user->id)->orderBy('created_at', 'desc')->get();
+            $user = Auth::user();   
+            $page = $request->query('page', 1);
+            $perPage = $request->query('per_page', 200);
+            $notifications =Notification::where('receiver_id', $user->id)->orderBy('created_at', 'desc')->paginate($perPage, ['*'], 'page', $page);
 
             return response()->json(['message' => 'Notifications listed successfully', 'data' => $notifications], 200);
         }catch(Exception $e){
