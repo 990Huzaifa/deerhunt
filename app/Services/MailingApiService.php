@@ -76,4 +76,64 @@ class MailingApiService
     {
         return View::make("mails.{$templateName}", $data)->render();
     }
+
+    public function sendForgotPasswordOtp(string $toEmail, string $name, string|int $otp): array
+    {
+        $bodyHtml = $this->renderTemplate('reset-password-email', $this->withDefaults([
+            'name' => $name,
+            'otp' => (string) $otp,
+        ]));
+
+        return $this->send(
+            $toEmail,
+            'Forgot Password Mail',
+            $bodyHtml,
+            $name
+        );
+    }
+
+    public function sendVerifyEmailOtp(string $toEmail, string $name, string|int $otp): array
+    {
+        $bodyHtml = $this->renderTemplate('verify-email', $this->withDefaults([
+            'name' => $name,
+            'otp' => (string) $otp,
+        ]));
+
+        return $this->send(
+            $toEmail,
+            'Verify Your Email',
+            $bodyHtml,
+            $name
+        );
+    }
+
+    public function sendWelcomeEmail(string $toEmail, string $name): array
+    {
+        $bodyHtml = $this->renderTemplate('welcome-email', $this->withDefaults([
+            'name' => $name,
+        ]));
+
+        return $this->send(
+            $toEmail,
+            'Welcome to ' . config('app.name', 'RackScore'),
+            $bodyHtml,
+            $name
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function withDefaults(array $data): array
+    {
+        $logoPath = public_path('logo.png');
+
+        return array_merge([
+            'logoUrl' => file_exists($logoPath) ? asset('logo.png') : null,
+            'year' => (int) date('Y'),
+            'appName' => config('app.name'),
+            'appUrl' => config('app.url'),
+        ], $data);
+    }
 }

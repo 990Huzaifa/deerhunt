@@ -2,7 +2,6 @@
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 function uploadImageToPublic(UploadedFile $file, string $folder, string $prefix): array
@@ -70,49 +69,15 @@ function uploadLocalImageToPublic(string $localFilePath, string $folder, string 
 
 function myMailSend($to, $name, $subject, $message, $link = null, $data = null)
 {
-    $mailServiceUrl = config('services.mail_service.url');
-    $apiKey = config('services.mail_service.api_key');
-    $masterUser = config('services.mail_service.master_user');
-    $fromEmail = config('mail.from.address') ?: ($masterUser ?? null);
-
-    if (!$mailServiceUrl || !$apiKey || !$masterUser || !$fromEmail) {
-        throw new RuntimeException('Mail service is not configured.');
-    }
-
-    $recipients = is_array($to) ? $to : [$to];
-    $recipients = array_values(array_filter(array_map('trim', $recipients), fn ($email) => $email !== ''));
-
-    if (empty($recipients)) {
-        throw new RuntimeException('Recipient email is required.');
-    }
-
     $bodyHtml = (string) $message;
     if (!empty($link)) {
         $bodyHtml .= '<p><a href="' . e($link) . '">Click here</a></p>';
     }
 
-    $payload = [
-        ['name' => 'master_user', 'contents' => $masterUser],
-        ['name' => 'from_email', 'contents' => $fromEmail],
-        ['name' => 'subject', 'contents' => $subject],
-        ['name' => 'body_html', 'contents' => $bodyHtml],
-    ];
-
-    foreach ($recipients as $recipient) {
-        $payload[] = ['name' => 'to_email', 'contents' => $recipient];
-    }
-
-    $response = Http::timeout((int) config('services.mail_service.timeout', 20))
-        ->withHeaders([
-            'x-api-key' => $apiKey,
-            'Accept' => 'application/json',
-        ])
-        ->asMultipart()
-        ->post($mailServiceUrl, $payload);
-
-    if (!$response->successful()) {
-        throw new RuntimeException('Failed to send email.');
-    }
-
-    return $response->json() ?? ['status' => 'success'];
+    return app(\App\Services\MailingApiService::class)->send(
+        $to,
+        $subject,
+        $bodyHtml,
+        $name
+    );
 }

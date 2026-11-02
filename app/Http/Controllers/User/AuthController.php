@@ -14,8 +14,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
-use App\Services\BrevoService;
 use App\Services\EngagementTrackingService;
+use App\Services\MailingApiService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
 use Str;
@@ -24,10 +24,14 @@ use Str;
 class AuthController extends Controller
 {
     protected EngagementTrackingService $engagementTracking;
+    protected MailingApiService $mailingApi;
 
-    public function __construct(EngagementTrackingService $engagementTracking)
-    {
+    public function __construct(
+        EngagementTrackingService $engagementTracking,
+        MailingApiService $mailingApi
+    ) {
         $this->engagementTracking = $engagementTracking;
+        $this->mailingApi = $mailingApi;
     }
 
     public function signin(Request $request): JsonResponse
@@ -111,11 +115,12 @@ class AuthController extends Controller
             DB::commit();
 
             try {
-                $brevo = app(BrevoService::class);
-                $brevo->registerContact($user);
-                $brevo->sendWelcomeEmail($user);
+                $this->mailingApi->sendWelcomeEmail(
+                    $user->email,
+                    $user->full_name ?: $user->username ?: 'Hunter'
+                );
             } catch (Exception $e) {
-                Log::error('Brevo signup sync failed', [
+                Log::error('Welcome email failed', [
                     'user_id' => $user->id,
                     'email' => $user->email,
                     'error' => $e->getMessage(),
@@ -273,11 +278,10 @@ class AuthController extends Controller
 
             $user = User::where('email', $request->email)->first();
 
-            myMailSend(
+            $this->mailingApi->sendForgotPasswordOtp(
                 $user->email,
-                $user->full_name,
-                'Forgot Password Mail',
-                '<p>Your password reset OTP is <strong>' . $token . '</strong>.</p>'
+                $user->full_name ?: $user->username ?: 'Hunter',
+                $token
             );
 
             return response()->json([
@@ -364,11 +368,10 @@ class AuthController extends Controller
                     'created_at' => now()
                 ]);
 
-            myMailSend(
+            $this->mailingApi->sendForgotPasswordOtp(
                 $user->email,
-                $user->full_name,
-                'Forgot Password Mail',
-                '<p>Your new password reset OTP is <strong>' . $token . '</strong>.</p>'
+                $user->full_name ?: $user->username ?: 'Hunter',
+                $token
             );
 
             return response()->json(['token' => $token], 200);

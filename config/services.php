@@ -45,26 +45,11 @@ return [
         'key' => env('OPENAI_API_KEY'),
     ],
 
-    'mail_service' => [
-        'url' => env('MAIL_SERVICE_URL'),
-        'api_key' => env('MAIL_API_KEY'),
-        'master_user' => env('MAIL_SERVICE_MASTER_USER'),
-        'timeout' => env('MAIL_SERVICE_TIMEOUT', 20),
-    ],
-
     'mailing_api' => [
         'url' => env('MAILING_API_URL', 'https://mailingapi.techvince.com/send-email'),
         'api_key' => env('MAILING_API_KEY'),
         'from_email' => env('MAILING_API_FROM_EMAIL', 'info@rackscore.us'),
         'timeout' => env('MAILING_API_TIMEOUT', 20),
-    ],
-
-    'brevo' => [
-        'api_key' => env('BREVO_API_KEY'),
-        'list_id' => (int) env('BREVO_LIST_ID', 3),
-        'welcome_template_id' => (int) env('BREVO_WELCOME_TEMPLATE_ID'),
-        'from_email' => env('BREVO_FROM_EMAIL', 'info@rackscore.us'),
-        'from_name' => env('BREVO_FROM_NAME', 'RackScore'),
     ],
 
     'revenuecat' => [
