@@ -77,7 +77,7 @@ class EngagementEmailService
     public function processFirstScoreReminders(): int
     {
         $sent = 0;
-        $cutoff = now()->subHours(6);
+        $cutoff = now()->subMinutes(6); // TODO: testing — restore to subHours(6)
 
         $engagements = UserEngagement::query()
             ->with('user')
@@ -103,7 +103,7 @@ class EngagementEmailService
     public function processSecondScoreReminders(): int
     {
         $sent = 0;
-        $cutoff = now()->subHours(24);
+        $cutoff = now()->subMinutes(24); // TODO: testing — restore to subHours(24)
 
         $engagements = UserEngagement::query()
             ->with('user')
