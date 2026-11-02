@@ -52,7 +52,7 @@ class MailingApiService
 
         $response = Http::timeout($timeout)
             ->withHeaders([
-                'x-api-header' => $apiKey,
+                'x-api-key' => $apiKey,
                 'Accept' => 'application/json',
             ])
             ->asMultipart()
