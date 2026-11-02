@@ -9,7 +9,7 @@ class ProcessScoreReminderEmails extends Command
 {
     protected $signature = 'app:process-score-reminder-emails';
 
-    protected $description = 'Send score reminder + score-ready (no plan) engagement emails';
+    protected $description = 'Send first/second score reminders + subscribe (paywall) engagement emails';
 
     public function handle(EngagementEmailService $engagementEmailService): int
     {
@@ -19,7 +19,7 @@ class ProcessScoreReminderEmails extends Command
 
         $this->info("First-score reminders sent: {$first}");
         $this->info("Second-score reminders sent: {$second}");
-        $this->info("Score-ready emails sent: {$ready}");
+        $this->info("Subscribe / score-ready emails sent: {$ready}");
 
         return self::SUCCESS;
     }

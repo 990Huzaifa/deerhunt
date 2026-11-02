@@ -73,6 +73,7 @@ class EngagementEmailService
 
     /**
      * Process due first-score reminders (login + 6h, no first score).
+     * Keeps sending on each cron run while first_score_at is still null.
      */
     public function processFirstScoreReminders(): int
     {
@@ -84,7 +85,6 @@ class EngagementEmailService
             ->whereNotNull('first_login_at')
             ->where('first_login_at', '<=', $cutoff)
             ->whereNull('first_score_at')
-            ->whereNull('first_score_reminder_sent_at')
             ->limit(200)
             ->get();
 
@@ -99,6 +99,7 @@ class EngagementEmailService
 
     /**
      * Process due second-score reminders (first score + 24h, no second score).
+     * Runs only after first_score_at is set; keeps sending while second_score_at is null.
      */
     public function processSecondScoreReminders(): int
     {
@@ -110,7 +111,6 @@ class EngagementEmailService
             ->whereNotNull('first_score_at')
             ->where('first_score_at', '<=', $cutoff)
             ->whereNull('second_score_at')
-            ->whereNull('second_score_reminder_sent_at')
             ->limit(200)
             ->get();
 
@@ -124,7 +124,8 @@ class EngagementEmailService
     }
 
     /**
-     * After 2nd score + 15 min, if user still has no active plan → score-ready email.
+     * Case 3: after second score is done, if trial paywall was never dismissed → subscribe email.
+     * Keeps sending on each cron run while trial_paywall_dismissed_at is still null.
      */
     public function processScoreReadyEmails(): int
     {
@@ -135,7 +136,7 @@ class EngagementEmailService
             ->with(['user.subscriptions', 'user.premium'])
             ->whereNotNull('second_score_at')
             ->where('second_score_at', '<=', $cutoff)
-            ->whereNull('score_ready_email_sent_at')
+            ->whereNull('trial_paywall_dismissed_at')
             ->limit(200)
             ->get();
 
@@ -146,20 +147,16 @@ class EngagementEmailService
                 continue;
             }
 
+            // Already subscribed — skip (paywall dismiss / plan will stop this case)
             if ($this->userHasActivePlan($user)) {
-                // Mark so we don't keep re-checking forever
-                $engagement->score_ready_email_sent_at = now();
-                $engagement->save();
                 continue;
             }
 
             try {
                 $this->sendScoreReady($user);
-                $engagement->score_ready_email_sent_at = now();
-                $engagement->save();
                 $sent++;
             } catch (Throwable $e) {
-                Log::error('Score ready email failed', [
+                Log::error('Score ready / subscribe email failed', [
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),
                 ]);
@@ -201,13 +198,6 @@ class EngagementEmailService
 
         try {
             $this->sendScoreReminder($user, $reminderType);
-
-            if ($reminderType === 'second') {
-                $engagement->second_score_reminder_sent_at = now();
-            } else {
-                $engagement->first_score_reminder_sent_at = now();
-            }
-            $engagement->save();
 
             return true;
         } catch (Throwable $e) {
