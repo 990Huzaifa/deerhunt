@@ -5,11 +5,21 @@ namespace App\Services;
 use App\Models\Post;
 use App\Models\User;
 use App\Models\UserEngagement;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class EngagementEmailService
 {
+    /** Max emails per reminder type per cron run (keeps job under the 5-min schedule). */
+    protected const BATCH_LIMIT = 20;
+
+    /** Min minutes between resends to the same user for the same reminder type. */
+    protected const REMINDER_COOLDOWN_MINUTES = 60;
+
+    /** Fetch more rows than BATCH_LIMIT so cooldown-skipped users don't block the queue. */
+    protected const CANDIDATE_LIMIT = 100;
+
     protected MailingApiService $mailingApi;
 
     public function __construct(MailingApiService $mailingApi)
@@ -73,23 +83,33 @@ class EngagementEmailService
 
     /**
      * Process due first-score reminders (login + 6h, no first score).
-     * Keeps sending on each cron run while first_score_at is still null.
+     * Resends while first_score_at is null, with cooldown between sends.
      */
     public function processFirstScoreReminders(): int
     {
         $sent = 0;
-        $cutoff = now()->subMinutes(6); // TODO: testing — restore to subHours(6)
+        $cutoff = now()->subHours(6);
 
         $engagements = UserEngagement::query()
             ->with('user')
             ->whereNotNull('first_login_at')
             ->where('first_login_at', '<=', $cutoff)
             ->whereNull('first_score_at')
-            ->limit(200)
+            ->orderBy('id')
+            ->limit(self::CANDIDATE_LIMIT)
             ->get();
 
         foreach ($engagements as $engagement) {
+            if ($sent >= self::BATCH_LIMIT) {
+                break;
+            }
+
+            if (!$this->canSendEngagementEmail($engagement, 'first_score')) {
+                continue;
+            }
+
             if ($this->dispatchReminder($engagement, 'first')) {
+                $this->markEngagementEmailSent($engagement, 'first_score');
                 $sent++;
             }
         }
@@ -99,23 +119,33 @@ class EngagementEmailService
 
     /**
      * Process due second-score reminders (first score + 24h, no second score).
-     * Runs only after first_score_at is set; keeps sending while second_score_at is null.
+     * Resends while second_score_at is null, with cooldown between sends.
      */
     public function processSecondScoreReminders(): int
     {
         $sent = 0;
-        $cutoff = now()->subMinutes(24); // TODO: testing — restore to subHours(24)
+        $cutoff = now()->subHours(24);
 
         $engagements = UserEngagement::query()
             ->with('user')
             ->whereNotNull('first_score_at')
             ->where('first_score_at', '<=', $cutoff)
             ->whereNull('second_score_at')
-            ->limit(200)
+            ->orderBy('id')
+            ->limit(self::CANDIDATE_LIMIT)
             ->get();
 
         foreach ($engagements as $engagement) {
+            if ($sent >= self::BATCH_LIMIT) {
+                break;
+            }
+
+            if (!$this->canSendEngagementEmail($engagement, 'second_score')) {
+                continue;
+            }
+
             if ($this->dispatchReminder($engagement, 'second')) {
+                $this->markEngagementEmailSent($engagement, 'second_score');
                 $sent++;
             }
         }
@@ -125,7 +155,7 @@ class EngagementEmailService
 
     /**
      * Case 3: after second score is done, if trial paywall was never dismissed → subscribe email.
-     * Keeps sending on each cron run while trial_paywall_dismissed_at is still null.
+     * Resends while trial_paywall_dismissed_at is null, with cooldown between sends.
      */
     public function processScoreReadyEmails(): int
     {
@@ -137,10 +167,19 @@ class EngagementEmailService
             ->whereNotNull('second_score_at')
             ->where('second_score_at', '<=', $cutoff)
             ->whereNull('trial_paywall_dismissed_at')
-            ->limit(200)
+            ->orderBy('id')
+            ->limit(self::CANDIDATE_LIMIT)
             ->get();
 
         foreach ($engagements as $engagement) {
+            if ($sent >= self::BATCH_LIMIT) {
+                break;
+            }
+
+            if (!$this->canSendEngagementEmail($engagement, 'score_ready')) {
+                continue;
+            }
+
             $user = $engagement->user;
 
             if (!$user || empty($user->email) || $user->is_delete || !$user->is_active) {
@@ -154,6 +193,7 @@ class EngagementEmailService
 
             try {
                 $this->sendScoreReady($user);
+                $this->markEngagementEmailSent($engagement, 'score_ready');
                 $sent++;
             } catch (Throwable $e) {
                 Log::error('Score ready / subscribe email failed', [
@@ -209,6 +249,39 @@ class EngagementEmailService
 
             return false;
         }
+    }
+
+    /**
+     * Cooldown tracker lives in feature_usage (no extra DB columns).
+     *
+     * @param  'first_score'|'second_score'|'score_ready'  $type
+     */
+    protected function canSendEngagementEmail(UserEngagement $engagement, string $type): bool
+    {
+        $lastAt = data_get($engagement->feature_usage, "email_reminders.{$type}.at");
+
+        if (empty($lastAt)) {
+            return true;
+        }
+
+        try {
+            return Carbon::parse($lastAt)->lte(now()->subMinutes(self::REMINDER_COOLDOWN_MINUTES));
+        } catch (Throwable) {
+            return true;
+        }
+    }
+
+    /**
+     * @param  'first_score'|'second_score'|'score_ready'  $type
+     */
+    protected function markEngagementEmailSent(UserEngagement $engagement, string $type): void
+    {
+        $usage = $engagement->feature_usage ?: UserEngagement::defaultFeatureUsage();
+        $usage['email_reminders'][$type] = [
+            'at' => now()->toIso8601String(),
+        ];
+        $engagement->feature_usage = $usage;
+        $engagement->save();
     }
 
     /**

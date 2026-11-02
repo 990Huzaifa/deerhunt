@@ -17,7 +17,9 @@ class Kernel extends ConsoleKernel
         // $schedule->command('app:track-premium')->everyMinute();
         $schedule->command('app:aggregate-geo-stats')->everyFifteenMinutes();
         // $schedule->command('app:reset-bot-daily-limit')->daily();
-        $schedule->command('app:process-score-reminder-emails')->everyFiveMinutes();
+        $schedule->command('app:process-score-reminder-emails')
+            ->everyFiveMinutes()
+            ->withoutOverlapping(45);
         // $schedule->command('backup:database')->daily();
         // $schedule->command('inspire')->hourly();
     }
