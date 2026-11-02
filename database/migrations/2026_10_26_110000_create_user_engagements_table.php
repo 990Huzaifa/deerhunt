@@ -18,6 +18,9 @@ return new class extends Migration
             $table->timestamp('first_login_at')->nullable();
             $table->timestamp('first_score_at')->nullable();
             $table->timestamp('second_score_at')->nullable();
+            $table->timestamp('first_score_reminder_sent_at')->nullable();
+            $table->timestamp('second_score_reminder_sent_at')->nullable();
+            $table->timestamp('score_ready_email_sent_at')->nullable();
             $table->timestamp('trial_paywall_dismissed_at')->nullable();
             $table->json('feature_usage')->nullable();
             $table->timestamps();
