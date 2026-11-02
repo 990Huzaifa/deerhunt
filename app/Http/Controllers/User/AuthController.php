@@ -198,6 +198,21 @@ class AuthController extends Controller
 
             $this->engagementTracking->recordLogin($user);
 
+            if (!$already_registered && !empty($user->email)) {
+                try {
+                    $this->mailingApi->sendWelcomeEmail(
+                        $user->email,
+                        $user->full_name ?: $user->username ?: 'Hunter'
+                    );
+                } catch (Exception $e) {
+                    Log::error('Welcome email failed', [
+                        'user_id' => $user->id,
+                        'email' => $user->email,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             return response()->json(['token' => $token,'user' => $user,'already_registered' => $already_registered], 200);
         }catch(QueryException $e){
             DB::rollBack();
