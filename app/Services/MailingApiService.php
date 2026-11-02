@@ -113,12 +113,19 @@ class MailingApiService
             'name' => $name,
         ]));
 
-        return $this->send(
+        $response = $this->send(
             $toEmail,
             'Welcome to ' . config('app.name', 'RackScore'),
             $bodyHtml,
             $name
         );
+
+        Log::info('Welcome email sent successfully', [
+            'email' => $toEmail,
+            'name' => $name,
+        ]);
+
+        return $response;
     }
 
     /**
