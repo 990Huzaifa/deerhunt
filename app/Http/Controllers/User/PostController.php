@@ -42,25 +42,45 @@ class PostController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            // search query
-            $search = $request->query('search');
-
-            $page = $request->query('page', 1);
-            $perPage = $request->query('per_page', 200);
+            $search = trim((string) $request->query('search', ''));
+            $page = max(1, (int) $request->query('page', 1));
+            $perPage = min(max((int) $request->query('per_page', 50), 1), 100);
 
             $user = Auth::user();
-            $posts = Post::select('posts.*', 'users.full_name', 'users.avatar')
-                ->join('users', 'users.id', '=', 'posts.user_id')->orderBy('created_at', 'desc')
+            $posts = Post::query()
+                ->select([
+                    'posts.id',
+                    'posts.user_id',
+                    'posts.title',
+                    'posts.image',
+                    'posts.score',
+                    'posts.like_count',
+                    'posts.comment_count',
+                    'posts.share_count',
+                    'posts.state',
+                    'posts.county',
+                    'posts.harvest_type',
+                    'posts.is_trophy',
+                    'posts.is_private',
+                    'posts.is_public',
+                    'posts.created_at',
+                    'users.full_name',
+                    'users.avatar',
+                ])
+                ->join('users', 'users.id', '=', 'posts.user_id')
                 ->where('posts.user_id', $user->id)
                 ->where('posts.is_trophy', true)
                 ->where('posts.is_private', true)
                 ->where('posts.is_delete', false)
-                ->where('ref_id', null)
+                ->whereNull('posts.ref_id')
                 ->excludeRescoreVersions()
-                ->where(function ($query) use ($search) {
+                ->when($search !== '', function ($query) use ($search) {
                     $query->where('posts.title', 'like', '%' . $search . '%');
                 })
+                ->orderByDesc('posts.created_at')
+                ->orderByDesc('posts.id')
                 ->paginate($perPage, ['*'], 'page', $page);
+
             return response()->json($posts);
         } catch (QueryException $e) {
             return response()->json(['DB error' => $e->getMessage()], 500);
