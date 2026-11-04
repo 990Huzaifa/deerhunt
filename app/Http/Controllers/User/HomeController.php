@@ -87,16 +87,35 @@ class HomeController extends Controller
     public function leaderboard(Request $request):JsonResponse
     {
         try{
-            $page = $request->query('page', 1);
-            $perPage = $request->query('per_page', 200);
+            $page = max(1, (int) $request->query('page', 1));
+            $perPage = min(max((int) $request->query('per_page', 50), 1), 100);
 
-            $leaderboard = Post::select('posts.*', 'users.full_name', 'users.avatar')
-                ->join('users', 'users.id', '=', 'posts.user_id')->orderBy('posts.score', 'desc')
+            $leaderboard = Post::query()
+                ->select([
+                    'posts.id',
+                    'posts.user_id',
+                    'posts.title',
+                    'posts.image',
+                    'posts.score',
+                    'posts.like_count',
+                    'posts.comment_count',
+                    'posts.share_count',
+                    'posts.state',
+                    'posts.county',
+                    'posts.harvest_type',
+                    'posts.created_at',
+                    'users.full_name',
+                    'users.avatar',
+                ])
+                ->join('users', 'users.id', '=', 'posts.user_id')
                 ->where('posts.is_delete', false)
-                ->where('posts.ref_id', null)
+                ->whereNull('posts.ref_id')
                 ->where('posts.is_trophy', true)
                 ->excludeRescoreVersions()
+                ->orderByDesc('posts.score')
+                ->orderByDesc('posts.id')
                 ->paginate($perPage, ['*'], 'page', $page);
+
             return response()->json($leaderboard);
         }catch(QueryException $e){
             return response()->json(['error' => $e->getMessage()], 500);

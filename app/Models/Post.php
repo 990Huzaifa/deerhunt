@@ -63,10 +63,10 @@ class Post extends Model
 
     public function scopeExcludeRescoreVersions($query)
     {
-        return $query->whereNotIn('posts.id', function ($sub) {
-            $sub->select('linked_post_id')
-                ->from('posts')
-                ->whereNotNull('linked_post_id');
+        return $query->whereNotExists(function ($sub) {
+            $sub->selectRaw('1')
+                ->from('posts as rescore_links')
+                ->whereColumn('rescore_links.linked_post_id', 'posts.id');
         });
     }
 
