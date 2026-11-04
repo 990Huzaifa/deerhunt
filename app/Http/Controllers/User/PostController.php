@@ -1120,43 +1120,38 @@ class PostController extends Controller
     public function postCommentList(Request $request, string $id): JsonResponse
     {
         try {
-            $post = Post::find($id);
+            $page = max(1, (int) $request->query('page', 1));
+            $perPage = min(max((int) $request->query('per_page', 50), 1), 100);
 
-            $page = $request->query('page', 1);
-            $perPage = $request->query('per_page', 200);
-
-            if (!$post) {
+            if (!Post::whereKey($id)->exists()) {
                 throw new Exception('Post not found', 404);
             }
 
-            // Fetch only top-level comments (parent_id is NULL)
-            $comments = PostComment::where('post_id', $id)
+            $commentColumns = ['id', 'post_id', 'user_id', 'parent_id', 'comment', 'created_at', 'updated_at'];
+
+            $comments = PostComment::query()
+                ->select($commentColumns)
+                ->where('post_id', $id)
                 ->whereNull('parent_id')
                 ->where('is_delete', false)
                 ->with([
-                    // We still need to Eager Load the 'user' relationship
-                    // for the accessors (username, avatar) to work efficiently.
-                    // We select only the necessary columns: id, username, avatar
                     'user:id,username,full_name,avatar',
-
-                    // Eager Load the replies, which is the custom relationship name
-                    'replies' => function ($query) {
-                        // Eager load the user for each reply as well
-                        $query->where('is_delete', false)->with('user:id,username,full_name,avatar');
+                    'replies' => function ($query) use ($commentColumns) {
+                        $query->select($commentColumns)
+                            ->where('is_delete', false)
+                            ->orderBy('created_at')
+                            ->orderBy('id')
+                            ->with('user:id,username,full_name,avatar');
                     },
                 ])
-                ->latest('created_at') // Order by latest comment
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
                 ->paginate($perPage, ['*'], 'page', $page);
-
-            // The structure of the $comments collection will now automatically
-            // include username/avatar and the nested 'replies' array
-            // because of the model changes in Step 1.
 
             return response()->json([
                 'message' => 'Comments fetched successfully',
-                'data' => $comments
+                'data' => $comments,
             ], 200);
-
         } catch (QueryException $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         } catch (Exception $e) {
