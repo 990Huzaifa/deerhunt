@@ -63,16 +63,37 @@ class HomeController extends Controller
         try{
             $user = Auth::user();
 
-            $page = $request->query('page', 1);
-            $perPage = $request->query('per_page', 200);
+            $page = max(1, (int) $request->query('page', 1));
+            $perPage = min(max((int) $request->query('per_page', 50), 1), 100);
 
-            $posts = Post::select('posts.*', 'users.full_name', 'users.avatar')
-                ->join('users', 'users.id', '=', 'posts.user_id')->orderBy('created_at', 'desc')
+            $posts = Post::query()
+                ->select([
+                    'posts.id',
+                    'posts.user_id',
+                    'posts.title',
+                    'posts.image',
+                    'posts.score',
+                    'posts.like_count',
+                    'posts.comment_count',
+                    'posts.share_count',
+                    'posts.state',
+                    'posts.county',
+                    'posts.harvest_type',
+                    'posts.is_trophy',
+                    'posts.is_public',
+                    'posts.created_at',
+                    'users.full_name',
+                    'users.avatar',
+                ])
+                ->join('users', 'users.id', '=', 'posts.user_id')
                 ->where('posts.user_id', $user->id)
                 ->where('posts.is_delete', false)
-                ->where('posts.ref_id', null)
+                ->whereNull('posts.ref_id')
                 ->excludeRescoreVersions()
+                ->orderByDesc('posts.created_at')
+                ->orderByDesc('posts.id')
                 ->paginate($perPage, ['*'], 'page', $page);
+
             return response()->json($posts);
         }catch(QueryException $e){
             return response()->json(['error' => $e->getMessage()], 500);
