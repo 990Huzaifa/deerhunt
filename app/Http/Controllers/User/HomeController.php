@@ -64,7 +64,7 @@ class HomeController extends Controller
             $user = Auth::user();
 
             $page = max(1, (int) $request->query('page', 1));
-            $perPage = min(max((int) $request->query('per_page', 50), 1), 100);
+            $perPage = min(max((int) $request->query('per_page', 10), 1), 100);
 
             $posts = Post::query()
                 ->select([

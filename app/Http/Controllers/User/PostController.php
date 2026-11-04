@@ -16,8 +16,10 @@ use Illuminate\Database\QueryException;
 use App\Models\PostView;
 use App\Models\PostLike;
 use App\Models\PostComment;
+use App\Models\Follow;
 use App\Services\EngagementTrackingService;
 use App\Services\NotificationService;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class PostController extends Controller
 {
@@ -880,33 +882,32 @@ class PostController extends Controller
     {
         try {
             $user = Auth::user();
-            $sortBy = $request->query('sort_by', 'latest');        // oldest, latest, most_liked
-
-            $search = $request->query('search');
-
-            $page = $request->query('page', 1);
-            $perPage = $request->query('per_page', 200);
+            $sortBy = $request->query('sort_by', 'latest');
+            $search = trim((string) $request->query('search', ''));
+            $page = max(1, (int) $request->query('page', 1));
+            $perPage = min(max((int) $request->query('per_page', 50), 1), 100);
 
             $applySorting = function ($query) use ($sortBy) {
                 switch ($sortBy) {
                     case 'oldest':
-                        return $query->orderBy('posts.created_at', 'asc');
+                        return $query->orderBy('posts.created_at', 'asc')->orderBy('posts.id', 'asc');
 
                     case 'most_liked':
-                        return $query->orderBy('posts.like_count', 'desc');
+                        return $query->orderByDesc('posts.like_count')->orderByDesc('posts.id');
 
                     case 'latest':
                     default:
-                        return $query->orderBy('posts.created_at', 'desc');
+                        return $query->orderByDesc('posts.created_at')->orderByDesc('posts.id');
                 }
             };
 
             $selectFields = [
+                'posts.id',
+                'posts.user_id',
                 'posts.created_at',
                 'posts.caption',
                 'posts.harvest_type',
                 'posts.score',
-                'posts.id',
                 'posts.state',
                 'posts.county',
                 'posts.image',
@@ -914,83 +915,74 @@ class PostController extends Controller
                 'posts.share_count',
                 'posts.like_count',
                 'posts.comment_count',
-                'posts.user_id',
                 'users.full_name',
                 'users.avatar',
                 'users.username',
                 'users.is_premium',
             ];
 
-            /**
-             * Public community posts
-             */
-            $postsQuery = Post::select($selectFields)
-                ->join('users', 'users.id', '=', 'posts.user_id')
-                ->where('posts.is_delete', false)
-                ->whereNull('posts.ref_id')
-                ->excludeRescoreVersions()
-                ->where('posts.is_public', true);
+            $baseQuery = function () use ($selectFields, $search) {
+                $query = Post::query()
+                    ->select($selectFields)
+                    ->join('users', 'users.id', '=', 'posts.user_id')
+                    ->where('posts.is_delete', false)
+                    ->whereNull('posts.ref_id')
+                    ->where('posts.is_public', true)
+                    ->excludeRescoreVersions();
 
+                if ($search !== '') {
+                    $query->where(function ($q) use ($search) {
+                        $q->where('users.full_name', 'like', '%' . $search . '%')
+                            ->orWhere('users.username', 'like', '%' . $search . '%');
+                    });
+                }
 
-            if ($search) {
-                $postsQuery->where(function ($query) use ($search) {
-                    $query->where('users.full_name', 'like', '%' . $search . '%')
-                        ->orWhere('users.username', 'like', '%' . $search . '%');
-                });
-            }
+                return $query;
+            };
 
+            $postsQuery = $baseQuery();
             $applySorting($postsQuery);
-
             $posts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
 
-            $followingQuery = Post::select($selectFields)
-                ->join('users', 'users.id', '=', 'posts.user_id')
-                ->join('follows', 'follows.following_id', '=', 'posts.user_id')
-                ->where('follows.follower_id', $user->id)
-                ->where('posts.is_delete', false)
-                ->whereNull('posts.ref_id')
-                ->excludeRescoreVersions()
-                ->where('posts.is_public', true);
+            $followingIds = Follow::where('follower_id', $user->id)->pluck('following_id');
 
-            
-            if ($search) {
-                $followingQuery->where(function ($query) use ($search) {
-                    $query->where('users.full_name', 'like', '%' . $search . '%')
-                        ->orWhere('users.username', 'like', '%' . $search . '%');
-                });
+            if ($followingIds->isEmpty()) {
+                $following_posts = new LengthAwarePaginator([], 0, $perPage, $page);
+            } else {
+                $followingQuery = $baseQuery()->whereIn('posts.user_id', $followingIds);
+                $applySorting($followingQuery);
+                $following_posts = $followingQuery->paginate($perPage, ['*'], 'page', $page);
             }
 
-            $applySorting($followingQuery);
+            $postIds = $posts->pluck('id')->merge($following_posts->pluck('id'))->unique()->values();
 
-            $following_posts = $followingQuery->paginate($perPage, ['*'], 'page', $page);
+            $likedLookup = [];
+            if ($postIds->isNotEmpty()) {
+                $likedLookup = array_flip(
+                    PostLike::where('user_id', $user->id)
+                        ->whereIn('post_id', $postIds)
+                        ->pluck('post_id')
+                        ->all()
+                );
+            }
 
-                    // 2. Extract Post IDs for efficient checking
-            $postIds = $posts->pluck('id')->merge($following_posts->pluck('id'))->unique();
+            $transformer = function ($post) use ($likedLookup) {
+                $postArray = $post instanceof \Illuminate\Database\Eloquent\Model
+                    ? $post->toArray()
+                    : (array) $post;
 
-            // 3. Get all the likes for these posts by the authenticated user in one query
-            $likedPostIds = PostLike::where('user_id', $user->id)
-                                    ->whereIn('post_id', $postIds)
-                                    ->pluck('post_id');
+                $postArray['is_like'] = isset($likedLookup[$postArray['id']]);
 
-            // 4. Create the transformation function
-            $transformer = function ($post) use ($likedPostIds) {
-                // Convert to array to easily add the new field
-                $postArray = $post instanceof \Illuminate\Database\Eloquent\Model ? $post->toArray() : (array) $post;
-                
-                // Check if the post ID is in the list of liked posts
-                $postArray['is_like'] = $likedPostIds->contains($postArray['id']);
-                
                 return $postArray;
             };
 
-            // 5. Apply the transformation to both paginated results
             $posts->getCollection()->transform($transformer);
             $following_posts->getCollection()->transform($transformer);
-            $posts = [
+
+            return response()->json([
                 'feeds' => $posts,
-                'following_posts' => $following_posts
-            ];
-            return response()->json($posts);
+                'following_posts' => $following_posts,
+            ]);
         } catch (QueryException $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         } catch (Exception $e) {
