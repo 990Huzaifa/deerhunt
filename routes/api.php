@@ -63,6 +63,7 @@ Route::get('premium-hunters', [HeatMapController::class, 'premiumHunters']);
 Route::get('ai-res',[BotController::class, 'testGPTres']);
 
 
+
 Route::prefix('admin')->group(function () {
     Route::post('signin', [AdminAuth::class, 'signin'])->name('admin.signin');
 });
@@ -72,6 +73,7 @@ Route::get('leaderboard', [HomeController::class, 'leaderboard']);
 Route::get('delete-user-account', [AuthController::class, 'deleteUserAccount']);
 Route::middleware(['auth:sanctum'])->group(function () {
 
+        Route::post('connect-fishline', [AuthController::class, 'connectFishline']);
         Route::post('get-location', [AuthController::class,'location']);
         Route::post('listen-from', [AuthController::class, 'listenFrom']);
         Route::post('change-password', [AuthController::class, 'changePassword']);

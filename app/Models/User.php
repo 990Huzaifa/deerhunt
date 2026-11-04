@@ -38,6 +38,7 @@ class User extends Authenticatable
         'personal_site',
         'google_id',
         'facebook_id',
+        'fishline_id',
         'apple_id',
         'listen_from',
         'analysis_count',

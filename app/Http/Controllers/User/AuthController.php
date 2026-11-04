@@ -482,4 +482,20 @@ class AuthController extends Controller
     {
         return response()->json(['message' => 'User account deleted successfully'], 200);
     }
+
+    public function connectFishline(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        $validator = Validator::make($request->all(), [
+            'fishline_id' => 'required|string',
+        ],[
+            'fishline_id.required' => 'Fishline ID is required',
+            'fishline_id.string' => 'Fishline ID must be a string',
+        ]);
+        if($validator->fails()) return response()->json(['error' => $validator->errors()->first()], 422);
+        $user->update([
+            'fishline_id' => $request->fishline_id,
+        ]);
+        return response()->json(['message' => 'Fishline connected successfully'], 200);
+    }
 }
