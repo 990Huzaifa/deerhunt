@@ -18,6 +18,8 @@ class UserEngagement extends Model
         'likes',
         'follow',
         'profile_edit',
+        'buck_gallery',
+        'scored_gallery',
         'subscribe',
     ];
 
