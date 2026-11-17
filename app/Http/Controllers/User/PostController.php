@@ -939,12 +939,14 @@ class PostController extends Controller
                 'users.avatar',
                 'users.username',
                 'users.is_premium',
+                'subscriptions.plan',
             ];
 
             $baseQuery = function () use ($selectFields, $search) {
                 $query = Post::query()
                     ->select($selectFields)
                     ->join('users', 'users.id', '=', 'posts.user_id')
+                    ->leftJoin('subscriptions', 'subscriptions.user_id', '=', 'users.id')
                     ->where('posts.is_delete', false)
                     ->whereNull('posts.ref_id')
                     ->where('posts.is_public', true)
