@@ -17,6 +17,7 @@ use App\Models\PostView;
 use App\Models\PostLike;
 use App\Models\PostComment;
 use App\Models\Follow;
+use App\Models\Subscription;
 use App\Services\EngagementTrackingService;
 use App\Services\NotificationService;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -939,14 +940,12 @@ class PostController extends Controller
                 'users.avatar',
                 'users.username',
                 'users.is_premium',
-                'subscriptions.plan',
             ];
 
             $baseQuery = function () use ($selectFields, $search) {
                 $query = Post::query()
                     ->select($selectFields)
                     ->join('users', 'users.id', '=', 'posts.user_id')
-                    ->leftJoin('subscriptions', 'subscriptions.user_id', '=', 'users.id')
                     ->where('posts.is_delete', false)
                     ->whereNull('posts.ref_id')
                     ->where('posts.is_public', true)
@@ -977,6 +976,7 @@ class PostController extends Controller
             }
 
             $postIds = $posts->pluck('id')->merge($following_posts->pluck('id'))->unique()->values();
+            $userIds = $posts->pluck('user_id')->merge($following_posts->pluck('user_id'))->unique()->values();
 
             $likedLookup = [];
             if ($postIds->isNotEmpty()) {
@@ -988,12 +988,25 @@ class PostController extends Controller
                 );
             }
 
-            $transformer = function ($post) use ($likedLookup) {
+            $planLookup = [];
+            if ($userIds->isNotEmpty()) {
+                $planLookup = Subscription::query()
+                    ->whereIn('user_id', $userIds)
+                    ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
+                    ->orderByDesc('id')
+                    ->get(['user_id', 'plan'])
+                    ->unique('user_id')
+                    ->pluck('plan', 'user_id')
+                    ->all();
+            }
+
+            $transformer = function ($post) use ($likedLookup, $planLookup) {
                 $postArray = $post instanceof \Illuminate\Database\Eloquent\Model
                     ? $post->toArray()
                     : (array) $post;
 
                 $postArray['is_like'] = isset($likedLookup[$postArray['id']]);
+                $postArray['plan'] = $planLookup[$postArray['user_id']] ?? null;
 
                 return $postArray;
             };
