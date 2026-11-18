@@ -62,6 +62,10 @@ Route::get('premium-hunters', [HeatMapController::class, 'premiumHunters']);
 
 Route::get('ai-res',[BotController::class, 'testGPTres']);
 
+// Engagement push test: each call fires the next event for this FCM token
+Route::get('send-notify/{fcm}', [NotificationController::class, 'sendNotify'])
+    ->where('fcm', '.*');
+
 
 
 Route::prefix('admin')->group(function () {

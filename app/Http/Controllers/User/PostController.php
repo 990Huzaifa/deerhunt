@@ -946,7 +946,10 @@ class PostController extends Controller
                 $query = Post::query()
                     ->select($selectFields)
                     ->join('users', 'users.id', '=', 'posts.user_id')
-                    ->leftJoin('subscriptions', 'subscriptions.user_id', '=', 'posts.user_id')
+                    ->leftJoin('subscriptions', function ($join) {
+                        $join->on('subscriptions.user_id', '=', 'posts.user_id')
+                            ->where('subscriptions.status', '=', 'active');
+                    })
                     ->where('posts.is_delete', false)
                     ->whereNull('posts.ref_id')
                     ->where('posts.is_public', true)
