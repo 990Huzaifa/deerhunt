@@ -20,6 +20,9 @@ class Kernel extends ConsoleKernel
         // $schedule->command('app:process-score-reminder-emails')
         //     ->everyFiveMinutes()
         //     ->withoutOverlapping(45);
+        $schedule->command('app:process-engagement-push-notifications')
+            ->everyFiveMinutes()
+            ->withoutOverlapping(45);
         // $schedule->command('backup:database')->daily();
         // $schedule->command('inspire')->hourly();
     }
