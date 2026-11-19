@@ -402,7 +402,9 @@ class AuthController extends Controller
     {
         $user = User::find($id);
 
-        $user->delete();
+        $user->update([
+            'is_delete' => 1,
+        ]);
         
         return response()->json([
                 'message' => 'User Deleted successfully',
