@@ -1,8 +1,8 @@
 <?php
+
 namespace App\Jobs;
 
 use App\Models\User;
-use App\Models\State;
 use App\Services\OpenAIService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -10,81 +10,83 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Throwable;
 
 class GenerateBotsJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    protected $count;
-    protected $configData;
+    /** Seconds — OpenAI calls per bot can add up. */
+    public $timeout = 900;
 
-    public function __construct($count, $configData)
+    public $tries = 1;
+
+    /** @var list<string> */
+    protected array $names;
+
+    protected array $configData;
+
+    /**
+     * @param  list<string>  $names
+     * @param  array{like_limit: int, comment_limit: int}  $configData
+     */
+    public function __construct(array $names, array $configData)
     {
-        $this->count = $count;
+        $this->names = $names;
         $this->configData = $configData;
     }
 
-    public function handle(OpenAIService $openAIService)
+    public function handle(OpenAIService $openAIService): void
     {
-        for ($i = 0; $i < $this->count; $i++) {
-            // OpenAI se data lena
-            $profile = $openAIService->generateBotProfile();
-            
-            // Avatar processing
-            $avatarPath = $this->moveRandomAvatar();
+        foreach ($this->names as $fullName) {
+            try {
+                $profile = $openAIService->generateBotProfile($fullName);
+                $username = $this->uniqueUsername($profile['username'] ?? null, $fullName);
 
-            // Transaction use karna behtar hai taaki data incomplete na rahay
-            DB::transaction(function () use ($profile, $avatarPath) {
-                $user = User::create([
-                    'username'  => $profile['username'],
-                    'full_name' => $profile['full_name'],
-                    'bio'       => $profile['bio'],
-                    'avatar'    => $avatarPath,
-                    'is_bot'    => true,
-                ]);
+                DB::transaction(function () use ($profile, $username, $fullName) {
+                    $user = User::create([
+                        'username'  => $username,
+                        'full_name' => $fullName,
+                        'bio'       => $profile['bio'] ?? 'Exploring the great outdoors.',
+                        'avatar'    => null,
+                        'is_bot'    => true,
+                        'is_active' => 'active',
+                    ]);
 
-                $user->botConfig()->create([
-                    'daily_like_limit'    => $this->configData['like_limit'],
-                    'daily_comment_limit' => $this->configData['comment_limit'],
+                    $user->botConfig()->create([
+                        'daily_like_limit'    => (int) $this->configData['like_limit'],
+                        'daily_comment_limit' => (int) $this->configData['comment_limit'],
+                    ]);
+                });
+            } catch (Throwable $e) {
+                Log::error('GenerateBotsJob failed for name', [
+                    'full_name' => $fullName,
+                    'error' => $e->getMessage(),
                 ]);
-            });
+            }
         }
     }
 
-    private function moveRandomAvatar()
+    protected function uniqueUsername(?string $preferred, string $fullName): string
     {
-        $sourceDir = public_path('bot-avatar');
-        $destinationDir = public_path('user-avatar');
+        $base = $preferred ?: Str::slug(str_replace(' ', '', strtolower($fullName)), '');
+        $base = preg_replace('/[^a-z0-9_]/i', '', (string) $base) ?: 'hunter';
+        $base = Str::limit($base, 20, '');
 
-        // 1. Check source directory
-        if (!File::exists($sourceDir) || count(File::files($sourceDir)) === 0) {
-            return null;
+        $username = $base;
+        $attempts = 0;
+
+        while (User::where('username', $username)->exists() && $attempts < 50) {
+            $username = $base . random_int(10, 9999);
+            $attempts++;
         }
 
-        // 2. Create destination directory if not exists
-        // if (!File::exists($destinationDir)) {
-        //     File::makeDirectory($destinationDir, 0755, true);
-        // }
+        if (User::where('username', $username)->exists()) {
+            $username = 'bot_' . Str::lower(Str::random(10));
+        }
 
-        // 3. Pick random avatar
-        $files = File::files($sourceDir);
-        $randomFile = $files[array_rand($files)];
-
-        // 4. Generate new image name
-        $extension = strtolower($randomFile->getExtension() ?: 'jpg');
-
-        $imageName = 'u-avatar-' . time() . '-' . rand(1000, 9999) . '.' . $extension;
-
-        // 5. DB path
-        $dbPath = 'user-avatar/' . $imageName;
-
-        uploadLocalImageToPublic(
-            $randomFile->getRealPath(),
-            'user-avatar',
-            $imageName
-        );
-
-        return $dbPath;
+        return $username;
     }
 }

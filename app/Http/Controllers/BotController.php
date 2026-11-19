@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Jobs\GenerateBotsJob;
 use App\Models\BotActivity;
 use App\Models\User;
-use App\Services\OpenAIService;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -109,22 +108,98 @@ class BotController extends Controller
     }
     public function generateBot(Request $request): JsonResponse
     {
-        try{
-            $validator = Validator::make($request->all(),[
-                'bot_count' => 'required|integer|max:50',
-                'config' => 'required|array'
+        try {
+            $validator = Validator::make($request->all(), [
+                'names' => 'required|file|mimes:csv,txt,text/plain,text/csv|max:5120',
+                'daily_like_limit' => 'required|integer|min:0|max:1000',
+                'daily_comment_limit' => 'required|integer|min:0|max:1000',
+            ], [
+                'names.required' => 'Please upload a CSV/TXT file with full names',
+                'names.mimes' => 'Names file must be CSV or TXT',
+                'daily_like_limit.required' => 'Daily like limit is required',
+                'daily_comment_limit.required' => 'Daily comment limit is required',
             ]);
-            if($validator->fails()) return response()->json(['error' => $validator->errors()->first()], 422);
-            // Job ko queue mein bhej dya
-            GenerateBotsJob::dispatch($request->bot_count, $request->config);
+
+            if ($validator->fails()) {
+                return response()->json(['error' => $validator->errors()->first()], 422);
+            }
+
+            $names = $this->parseNamesFile($request->file('names'));
+
+            if (count($names) === 0) {
+                return response()->json(['error' => 'No valid full names found in the uploaded file'], 422);
+            }
+
+            if (count($names) > 500) {
+                return response()->json(['error' => 'Maximum 500 bots can be generated per upload'], 422);
+            }
+
+            $config = [
+                'like_limit' => (int) $request->daily_like_limit,
+                'comment_limit' => (int) $request->daily_comment_limit,
+            ];
+
+            GenerateBotsJob::dispatch($names, $config);
+
+            $botCount = count($names);
 
             return response()->json([
                 'status' => 'success',
-                'message' => "Bot generation process started in background for {$request->bot_count} bots."
+                'message' => "Bot generation started in background for {$botCount} bots.",
+                'bot_count' => $botCount,
+                'config' => [
+                    'daily_like_limit' => $config['like_limit'],
+                    'daily_comment_limit' => $config['comment_limit'],
+                ],
             ]);
-        }catch(Exception $e){
+        } catch (Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Parse uploaded CSV/TXT into unique trimmed full names.
+     * Accepts one name per line, or first column of a CSV. Skips header rows like "name"/"full_name".
+     *
+     * @return list<string>
+     */
+    protected function parseNamesFile($file): array
+    {
+        $handle = fopen($file->getRealPath(), 'r');
+        if ($handle === false) {
+            return [];
+        }
+
+        $names = [];
+        $isFirst = true;
+
+        while (($row = fgetcsv($handle)) !== false) {
+            if (!is_array($row) || count($row) === 0) {
+                continue;
+            }
+
+            $name = trim((string) ($row[0] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            // Strip UTF-8 BOM
+            $name = preg_replace('/^\xEF\xBB\xBF/', '', $name);
+
+            if ($isFirst) {
+                $isFirst = false;
+                $header = strtolower(str_replace([' ', '-'], '_', $name));
+                if (in_array($header, ['name', 'full_name', 'fullname', 'bot_name'], true)) {
+                    continue;
+                }
+            }
+
+            $names[] = $name;
+        }
+
+        fclose($handle);
+
+        return array_values(array_unique($names));
     }
     public function BotActivityLog(Request $request): JsonResponse
     {
@@ -168,11 +243,12 @@ class BotController extends Controller
 
     public function MaxBotCreate(): JsonResponse
     {
-        // based on images in bot-avatar folder
-
-        $files = glob(public_path('bot-avatar/*'));
-        $count = count($files); // Number of files in the directory
-        return response()->json(['max_bot_create' => $count]);
+        // Bot count now comes from the uploaded names CSV (no avatar pool limit).
+        return response()->json([
+            'max_bot_create' => 500,
+            'avatar_required' => false,
+            'message' => 'Upload a CSV of full names; bot count = number of names (max 500).',
+        ]);
     }
 
     public function deleteBot($id): JsonResponse

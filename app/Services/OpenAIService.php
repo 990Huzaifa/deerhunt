@@ -7,9 +7,11 @@ use Illuminate\Support\Facades\Http;
 class OpenAIService {
 
 
-    public function generateBotProfile() 
+    /**
+     * Generate username + bio for a bot. When $fullName is provided it is kept as-is.
+     */
+    public function generateBotProfile(?string $fullName = null)
     {
-        // List of different categories/personas to ensure variety
         $categories = [
             'Deer Hunting & Tracking',
             'Fly Fishing & River Life',
@@ -18,17 +20,23 @@ class OpenAIService {
             'Camping & Bushcraft',
             'Wildlife Photography',
             'Waterfowl & Duck Hunting',
-            'Off-roading & Overland Adventure'
+            'Off-roading & Overland Adventure',
         ];
 
-        // Pick a random category
         $selectedCategory = $categories[array_rand($categories)];
 
-        // We add a 'random seed' or instruction for unique naming
-        $prompt = "Generate a unique user profile for someone interested in: {$selectedCategory}. 
+        if ($fullName) {
+            $prompt = "Create a social profile for an outdoors person named \"{$fullName}\" interested in: {$selectedCategory}.
+                Theme: Rugged, authentic, and specific to the niche.
+                You must return a JSON object with EXACTLY these keys: 'username' and 'bio'.
+                Rules for username: lowercase, no spaces, letters/numbers/underscore only, max 20 chars, unique-looking.
+                Rules for bio: 1 short sentence, max 120 chars, no hashtags.";
+        } else {
+            $prompt = "Generate a unique user profile for someone interested in: {$selectedCategory}.
                 Theme: Rugged, authentic, and specific to the niche.
                 Important: Do NOT use common names like 'John Doe'. Use a variety of realistic names.
                 You must return a JSON object with EXACTLY these keys: 'username', 'full_name', and 'bio'.";
+        }
 
         $response = Http::withHeaders([
             'Authorization' => 'Bearer ' . config('services.openai.key'),
@@ -36,17 +44,17 @@ class OpenAIService {
             'model' => 'gpt-3.5-turbo-0125',
             'messages' => [
                 ['role' => 'system', 'content' => 'You are a creative assistant that outputs unique, diverse, and realistic user profiles in JSON format.'],
-                ['role' => 'user', 'content' => $prompt]
+                ['role' => 'user', 'content' => $prompt],
             ],
             'response_format' => ['type' => 'json_object'],
-            'temperature' => 0.9, // Higher temperature increases randomness/creativity
+            'temperature' => 0.9,
         ]);
 
-        $data = json_decode($response->json('choices.0.message.content'), true);
+        $data = json_decode($response->json('choices.0.message.content'), true) ?: [];
 
         return [
             'username'  => $data['username'] ?? 'user_' . uniqid(),
-            'full_name' => $data['full_name'] ?? 'Outdoor Explorer',
+            'full_name' => $fullName ?: ($data['full_name'] ?? 'Outdoor Explorer'),
             'bio'       => $data['bio'] ?? 'Exploring the great outdoors.',
         ];
     }
