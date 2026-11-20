@@ -73,7 +73,7 @@ class WebhookController extends Controller
 
         ProcessRevenueCatWebhook::dispatch($request->all())->onQueue('revenuecat-webhooks');
 
-        return response()->json(['status' => 'ok'], 200);
+        return response()->json(['status' => 'notied to server'], 200);
     }
 
     public function decodeApple(Request $request): JsonResponse
