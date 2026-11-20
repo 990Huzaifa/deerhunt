@@ -69,6 +69,8 @@ class ProcessRevenueCatWebhook implements ShouldQueue
             $subscription = Subscription::where('user_id', $user->id)->first();
         }
 
+        $handled = false;
+
         switch ($type) {
             case 'INITIAL_PURCHASE':
             case 'RENEWAL':
@@ -98,8 +100,9 @@ class ProcessRevenueCatWebhook implements ShouldQueue
                 if ($subscription) {
                     $subscription->update($data);
                 } else {
-                    Subscription::create($data);
+                    $subscription = Subscription::create($data);
                 }
+                $handled = true;
                 break;
 
             case 'CANCELLATION':
@@ -115,6 +118,7 @@ class ProcessRevenueCatWebhook implements ShouldQueue
                     'canceled_at' => now(),
                     'expires_at' => $expiresAt ?? $subscription->expires_at,
                 ]);
+                $handled = true;
                 break;
 
             case 'EXPIRATION':
@@ -129,10 +133,24 @@ class ProcessRevenueCatWebhook implements ShouldQueue
                     'status' => 'expired',
                     'expires_at' => $expiresAt ?? now(),
                 ]);
+                $handled = true;
                 break;
 
             default:
                 break;
+        }
+
+        if ($handled) {
+            $user->refresh();
+            $user->load('subscriptions');
+
+            Log::info('RevenueCat webhook processed successfully', [
+                'type' => $type,
+                'product_id' => $productId,
+                'plan' => $plan,
+                'transaction_id' => $transactionId,
+                'user' => $user->toArray(),
+            ]);
         }
     }
 
