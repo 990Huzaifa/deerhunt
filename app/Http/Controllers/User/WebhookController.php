@@ -51,6 +51,16 @@ class WebhookController extends Controller
 
     public function handleRevenueCat(Request $request): JsonResponse
     {
+        $payload = $request->all();
+        $event = $payload['event'] ?? $payload;
+
+        Log::info('RevenueCat webhook received', [
+            'type' => is_array($event) ? ($event['type'] ?? null) : null,
+            'app_user_id' => is_array($event) ? ($event['app_user_id'] ?? null) : null,
+            'product_id' => is_array($event) ? ($event['product_id'] ?? null) : null,
+            'payload' => $payload,
+        ]);
+
         $expectedAuth = config('services.revenuecat.webhook_auth');
         $authHeader = $request->header('Authorization');
 
