@@ -163,7 +163,10 @@ class ExecuteBotActivity extends Command
         }
 
         $aiService = new OpenAIService();
-        $commentText = $aiService->generateSmartComment($caption);
+        $commentText = trim((string) $aiService->generateSmartComment($caption));
+        if ($commentText === '') {
+            return false;
+        }
 
         // Aapke comments table mein entry
         $comment = PostComment::create([
