@@ -108,14 +108,18 @@ class ExecuteBotActivity extends Command
                 }
             }
 
-            // 🔥 Comments perform karo
+            // 🔥 Comments perform karo — sirf caption wali posts
             if ($remainingComments > 0) {
                 for ($i = 0; $i < $remainingComments; $i++) {
 
-                    $post = $this->getRandomPost($bot);
-                    if (!$post) continue;
+                    $post = $this->getRandomPostWithCaption($bot);
+                    if (!$post) {
+                        continue;
+                    }
 
-                    $this->performComment($bot, $post);
+                    if (!$this->performComment($bot, $post)) {
+                        continue;
+                    }
 
                     $config->increment('total_actions_today');
                     $config->increment('comments_done_today');
@@ -134,16 +138,32 @@ class ExecuteBotActivity extends Command
         return Post::where('is_trophy', true)
             ->where('is_public', true)
             ->where('is_delete', false)
-            ->where('user_id', '!=', $bot->id) // apni post avoid
+            ->where('user_id', '!=', $bot->id)
             ->inRandomOrder()
             ->first();
     }
 
-    private function performComment($bot, $post) 
+    private function getRandomPostWithCaption($bot)
     {
+        return Post::where('is_trophy', true)
+            ->where('is_public', true)
+            ->where('is_delete', false)
+            ->where('user_id', '!=', $bot->id)
+            ->whereNotNull('caption')
+            ->whereRaw("TRIM(caption) != ''")
+            ->inRandomOrder()
+            ->first();
+    }
+
+    private function performComment($bot, $post): bool
+    {
+        $caption = trim((string) $post->caption);
+        if ($caption === '') {
+            return false;
+        }
+
         $aiService = new OpenAIService();
-        // $commentText = $aiService->generateSmartComment($post->caption ?? 'Nice harvest!');
-        $commentText = 'Nice Buck';
+        $commentText = $aiService->generateSmartComment($caption);
 
         // Aapke comments table mein entry
         $comment = PostComment::create([
@@ -169,6 +189,8 @@ class ExecuteBotActivity extends Command
             'New Comment received',
             ['type' => 'comment', 'post_id' => $post->id, 'comment_id' => $comment->id, 'receiver_username' => $post->user->username]
         );
+
+        return true;
     }
 
     private function performLike($bot, $post) {
