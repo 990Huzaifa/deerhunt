@@ -28,6 +28,8 @@ class ResetBotDailyLimit extends Command
     {
         $updated = BotConfig::query()->update([
             'total_actions_today' => 0,
+            'likes_done_today' => 0,
+            'comments_done_today' => 0,
         ]);
 
         $this->info("Bot daily limits reset successfully. Updated records: {$updated}");
