@@ -56,5 +56,10 @@ return [
         'webhook_auth' => env('REVENUECAT_WEBHOOK_AUTH'),
     ],
 
+    'stores' => [
+        'apple' => env('APPLE_STORE_URL', 'https://apps.apple.com/us/app/rackscore-ai-deer-scoring/id6803490172'),
+        'google' => env('GOOGLE_PLAY_URL', 'https://play.google.com/store/apps/details?id=com.rackscore.ai'),
+    ],
+
 ];
 

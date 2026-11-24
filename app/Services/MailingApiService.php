@@ -40,7 +40,7 @@ class MailingApiService
 
         $multipart = [
             ['name' => 'subject', 'contents' => $subject],
-            ['name' => 'name', 'contents' => $name ?: config('app.name', 'RackScore')],
+            ['name' => 'name', 'contents' => $name ?: config('app.name', 'Rackscore')],
             ['name' => 'body', 'contents' => $body ?? strip_tags($bodyHtml)],
             ['name' => 'from_email', 'contents' => $fromEmail],
             ['name' => 'body_html', 'contents' => $bodyHtml],
@@ -115,7 +115,7 @@ class MailingApiService
 
         $response = $this->send(
             $toEmail,
-            'Welcome to ' . config('app.name', 'RackScore'),
+            'Is he down? Now score him.',
             $bodyHtml,
             $name
         );
@@ -138,9 +138,12 @@ class MailingApiService
 
         return array_merge([
             'logoUrl' => file_exists($logoPath) ? asset('logo.png') : null,
+            'welcomeHeroUrl' => asset('mails/welcome-hero.jpg'),
             'year' => (int) date('Y'),
             'appName' => config('app.name'),
             'appUrl' => config('app.url'),
+            'appleStoreUrl' => config('services.stores.apple'),
+            'googlePlayUrl' => config('services.stores.google'),
         ], $data);
     }
 }
