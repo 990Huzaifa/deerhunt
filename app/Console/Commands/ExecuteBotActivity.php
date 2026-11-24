@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\OpenAIService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class ExecuteBotActivity extends Command
 {
@@ -90,40 +91,38 @@ class ExecuteBotActivity extends Command
                 continue;
             }
 
-            // Remaining counts calculate karo
             $remainingLikes = (int) $config->daily_like_limit - ($config->likes_done_today ?? 0);
             $remainingComments = (int) $config->daily_comment_limit - ($config->comments_done_today ?? 0);
 
-            // 🔥 Likes perform karo
-            if ($remainingLikes > 0) {
-                for ($i = 0; $i < $remainingLikes; $i++) {
+            $likesThisRun = min(max($remainingLikes, 0), 3);
+            $commentsThisRun = min(max($remainingComments, 0), 2);
 
-                    $post = $this->getRandomPost($bot);
-                    if (!$post) continue;
-
-                    $this->performLike($bot, $post);
-
-                    $config->increment('total_actions_today');
-                    $config->increment('likes_done_today');
+            // Comments first so likes/OpenAI timeout comments ko skip na karein
+            for ($i = 0; $i < $commentsThisRun; $i++) {
+                $post = $this->getRandomPostWithCaption($bot);
+                if (!$post) {
+                    $this->warn("No captioned post found for bot {$bot->id}");
+                    break;
                 }
+
+                if (!$this->performComment($bot, $post)) {
+                    continue;
+                }
+
+                $config->increment('total_actions_today');
+                $config->increment('comments_done_today');
             }
 
-            // 🔥 Comments perform karo — sirf caption wali posts
-            if ($remainingComments > 0) {
-                for ($i = 0; $i < $remainingComments; $i++) {
-
-                    $post = $this->getRandomPostWithCaption($bot);
-                    if (!$post) {
-                        continue;
-                    }
-
-                    if (!$this->performComment($bot, $post)) {
-                        continue;
-                    }
-
-                    $config->increment('total_actions_today');
-                    $config->increment('comments_done_today');
+            for ($i = 0; $i < $likesThisRun; $i++) {
+                $post = $this->getRandomPost($bot);
+                if (!$post) {
+                    continue;
                 }
+
+                $this->performLike($bot, $post);
+
+                $config->increment('total_actions_today');
+                $config->increment('likes_done_today');
             }
 
             // Last active update
@@ -135,22 +134,27 @@ class ExecuteBotActivity extends Command
 
     private function getRandomPost($bot)
     {
-        return Post::where('is_trophy', true)
+        return Post::query()
             ->where('is_public', true)
             ->where('is_delete', false)
             ->where('user_id', '!=', $bot->id)
+            ->whereNull('ref_id')
             ->inRandomOrder()
             ->first();
     }
 
     private function getRandomPostWithCaption($bot)
     {
-        return Post::where('is_trophy', true)
+        return Post::query()
             ->where('is_public', true)
             ->where('is_delete', false)
             ->where('user_id', '!=', $bot->id)
+            ->whereNull('ref_id')
             ->whereNotNull('caption')
             ->whereRaw("TRIM(caption) != ''")
+            ->whereDoesntHave('comments', function ($q) use ($bot) {
+                $q->where('user_id', $bot->id);
+            })
             ->inRandomOrder()
             ->first();
     }
@@ -162,9 +166,22 @@ class ExecuteBotActivity extends Command
             return false;
         }
 
-        $aiService = new OpenAIService();
-        $commentText = trim((string) $aiService->generateSmartComment($caption));
+        try {
+            $aiService = new OpenAIService();
+            $commentText = trim((string) $aiService->generateSmartComment($caption));
+        } catch (\Throwable $e) {
+            $this->error("Comment AI failed for post {$post->id}: {$e->getMessage()}");
+            Log::error('Bot comment generation failed', [
+                'bot_id' => $bot->id,
+                'post_id' => $post->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+
         if ($commentText === '') {
+            $this->warn("AI skipped comment for post {$post->id}");
             return false;
         }
 

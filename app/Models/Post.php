@@ -56,6 +56,11 @@ class Post extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function comments()
+    {
+        return $this->hasMany(PostComment::class, 'post_id');
+    }
+
     public function linkedPost()
     {
         return $this->belongsTo(Post::class, 'linked_post_id');
