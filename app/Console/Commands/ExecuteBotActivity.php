@@ -72,6 +72,8 @@ class ExecuteBotActivity extends Command
 
     public function handle()
     {
+        $this->botLog('run_start');
+
         $bots = User::where('is_bot', true)
             ->where('is_delete', 0)
             ->whereHas('botConfig', function ($q) {
@@ -81,13 +83,34 @@ class ExecuteBotActivity extends Command
             ->limit(5)
             ->get();
 
-        foreach ($bots as $bot) {
+        $this->botLog('bots_loaded', ['count' => $bots->count(), 'ids' => $bots->pluck('id')->all()]);
 
+        if ($bots->isEmpty()) {
+            $this->botLog('no_eligible_bots');
+            return self::SUCCESS;
+        }
+
+        foreach ($bots as $bot) {
             $config = $bot->botConfig;
+
+            $this->botLog('bot_start', [
+                'bot_id' => $bot->id,
+                'username' => $bot->username,
+                'daily_like_limit' => $config->daily_like_limit ?? null,
+                'daily_comment_limit' => $config->daily_comment_limit ?? null,
+                'likes_done_today' => $config->likes_done_today ?? null,
+                'comments_done_today' => $config->comments_done_today ?? null,
+                'total_actions_today' => $config->total_actions_today ?? null,
+            ]);
 
             $totalAllowed = (int) $config->daily_like_limit + (int) $config->daily_comment_limit;
 
             if ((int) $config->total_actions_today >= $totalAllowed) {
+                $this->botLog('bot_skip_quota_full', [
+                    'bot_id' => $bot->id,
+                    'total_actions_today' => $config->total_actions_today,
+                    'total_allowed' => $totalAllowed,
+                ]);
                 continue;
             }
 
@@ -97,63 +120,109 @@ class ExecuteBotActivity extends Command
             $likesThisRun = min(max($remainingLikes, 0), 3);
             $commentsThisRun = min(max($remainingComments, 0), 2);
 
-            // Comments first so likes/OpenAI timeout comments ko skip na karein
+            $this->botLog('bot_quotas', [
+                'bot_id' => $bot->id,
+                'remaining_likes' => $remainingLikes,
+                'remaining_comments' => $remainingComments,
+                'likes_this_run' => $likesThisRun,
+                'comments_this_run' => $commentsThisRun,
+            ]);
+
             for ($i = 0; $i < $commentsThisRun; $i++) {
+                $this->botLog('comment_attempt', ['bot_id' => $bot->id, 'attempt' => $i + 1]);
+
                 $post = $this->getRandomPostWithCaption($bot);
                 if (!$post) {
-                    $this->warn("No captioned post found for bot {$bot->id}");
+                    $this->botLog('comment_no_captioned_post', ['bot_id' => $bot->id]);
                     break;
                 }
 
+                $this->botLog('comment_post_found', [
+                    'bot_id' => $bot->id,
+                    'post_id' => $post->id,
+                    'caption_preview' => mb_substr(trim((string) $post->caption), 0, 80),
+                ]);
+
                 if (!$this->performComment($bot, $post)) {
+                    $this->botLog('comment_failed_or_skipped', [
+                        'bot_id' => $bot->id,
+                        'post_id' => $post->id,
+                    ]);
                     continue;
                 }
 
                 $config->increment('total_actions_today');
                 $config->increment('comments_done_today');
+                $this->botLog('comment_quota_incremented', ['bot_id' => $bot->id]);
             }
 
             for ($i = 0; $i < $likesThisRun; $i++) {
+                $this->botLog('like_attempt', ['bot_id' => $bot->id, 'attempt' => $i + 1]);
+
                 $post = $this->getRandomPost($bot);
                 if (!$post) {
+                    $this->botLog('like_no_public_post', ['bot_id' => $bot->id]);
                     continue;
                 }
 
+                $this->botLog('like_post_found', ['bot_id' => $bot->id, 'post_id' => $post->id]);
                 $this->performLike($bot, $post);
-
                 $config->increment('total_actions_today');
                 $config->increment('likes_done_today');
             }
 
-            // Last active update
             $config->update([
                 'last_active_at' => now()
             ]);
+            $this->botLog('bot_done', ['bot_id' => $bot->id]);
         }
+
+        $this->botLog('run_end');
+
+        return self::SUCCESS;
+    }
+
+    private function publicPostsQuery($bot)
+    {
+        return Post::query()
+            ->where('is_public', 1)
+            ->where('is_delete', 0)
+            ->where('user_id', '!=', $bot->id)
+            ->whereNull('ref_id');
     }
 
     private function getRandomPost($bot)
     {
-        return Post::query()
-            ->where('is_public', true)
-            ->where('is_delete', false)
-            ->where('user_id', '!=', $bot->id)
-            ->whereNull('ref_id')
+        return $this->publicPostsQuery($bot)
             ->inRandomOrder()
             ->first();
     }
 
     private function getRandomPostWithCaption($bot)
     {
-        return Post::query()
-            ->where('is_public', true)
-            ->where('is_delete', false)
-            ->where('user_id', '!=', $bot->id)
-            ->whereNull('ref_id')
+        $base = $this->publicPostsQuery($bot);
+        $publicCount = (clone $base)->count();
+        $captionCount = (clone $base)
             ->whereNotNull('caption')
-            ->whereRaw("TRIM(caption) != ''")
-            ->whereDoesntHave('comments', function ($q) use ($bot) {
-                $q->where('user_id', $bot->id);
+            ->where('caption', '!=', '')
+            ->whereRaw("CHAR_LENGTH(TRIM(caption)) > 2")
+            ->count();
+
+        $this->botLog('caption_query_counts', [
+            'bot_id' => $bot->id,
+            'public_posts' => $publicCount,
+            'public_with_caption' => $captionCount,
+        ]);
+
+        return $this->publicPostsQuery($bot)
+            ->whereNotNull('caption')
+            ->where('caption', '!=', '')
+            ->whereRaw("CHAR_LENGTH(TRIM(caption)) > 2")
+            ->whereNotExists(function ($q) use ($bot) {
+                $q->selectRaw('1')
+                    ->from('post_comments')
+                    ->whereColumn('post_comments.post_id', 'posts.id')
+                    ->where('post_comments.user_id', $bot->id);
             })
             ->inRandomOrder()
             ->first();
@@ -162,16 +231,30 @@ class ExecuteBotActivity extends Command
     private function performComment($bot, $post): bool
     {
         $caption = trim((string) $post->caption);
+        $this->botLog('comment_caption_check', [
+            'bot_id' => $bot->id,
+            'post_id' => $post->id,
+            'caption_length' => mb_strlen($caption),
+        ]);
+
         if ($caption === '') {
+            $this->botLog('comment_empty_caption', ['bot_id' => $bot->id, 'post_id' => $post->id]);
             return false;
         }
 
         try {
+            $this->botLog('comment_ai_start', ['bot_id' => $bot->id, 'post_id' => $post->id]);
             $aiService = new OpenAIService();
             $commentText = trim((string) $aiService->generateSmartComment($caption));
+            $this->botLog('comment_ai_result', [
+                'bot_id' => $bot->id,
+                'post_id' => $post->id,
+                'ai_text' => $commentText !== '' ? mb_substr($commentText, 0, 120) : null,
+                'ai_empty' => $commentText === '',
+            ]);
         } catch (\Throwable $e) {
             $this->error("Comment AI failed for post {$post->id}: {$e->getMessage()}");
-            Log::error('Bot comment generation failed', [
+            $this->botLog('comment_ai_exception', [
                 'bot_id' => $bot->id,
                 'post_id' => $post->id,
                 'error' => $e->getMessage(),
@@ -181,7 +264,10 @@ class ExecuteBotActivity extends Command
         }
 
         if ($commentText === '') {
-            $this->warn("AI skipped comment for post {$post->id}");
+            $this->botLog('comment_ai_empty_after_generate', [
+                'bot_id' => $bot->id,
+                'post_id' => $post->id,
+            ]);
             return false;
         }
 
@@ -210,36 +296,53 @@ class ExecuteBotActivity extends Command
             ['type' => 'comment', 'post_id' => $post->id, 'comment_id' => $comment->id, 'receiver_username' => $post->user->username]
         );
 
+        $this->botLog('comment_saved', [
+            'bot_id' => $bot->id,
+            'post_id' => $post->id,
+            'comment_id' => $comment->id,
+            'comment_text' => $commentText,
+        ]);
+
         return true;
     }
 
-    private function performLike($bot, $post) {
-        $check_like = PostLike::where('post_id',$post->id)->where('user_id',$bot->id)->first();
-        if(!$check_like){
-            $post->increment('like_count');
-            PostLike::create([
-                'post_id' => $post->id,
-                'user_id' => $bot->id
-            ]);
+    private function botLog(string $step, array $context = []): void
+    {
+        Log::info('BotActivity: ' . $step, $context);
+        $this->line($step . ' ' . json_encode($context));
+    }
 
-            BotActivity::create([
-                'bot_id'         => $bot->id,
-                'target_post_id' => $post->id,
-                'target_user_id' => $post->user_id, // Owner of the post
-                'action_type'    => 'like'
-            ]);
-
-            // send notification
-            
-            $this->notificationService->send(
-                $bot->id,
-                $post->user_id,
-                'like',
-                "{$bot->username} liked your post.",
-                'New Like on Your Post',
-                ['type' => 'like', 'post_id' => $post->id, 'receiver_username' => $post->user->username]
-            );
+    private function performLike($bot, $post)
+    {
+        $check_like = PostLike::where('post_id', $post->id)->where('user_id', $bot->id)->first();
+        if ($check_like) {
+            $this->botLog('like_already_exists', ['bot_id' => $bot->id, 'post_id' => $post->id]);
+            return;
         }
+
+        $post->increment('like_count');
+        PostLike::create([
+            'post_id' => $post->id,
+            'user_id' => $bot->id
+        ]);
+
+        BotActivity::create([
+            'bot_id'         => $bot->id,
+            'target_post_id' => $post->id,
+            'target_user_id' => $post->user_id,
+            'action_type'    => 'like'
+        ]);
+
+        $this->notificationService->send(
+            $bot->id,
+            $post->user_id,
+            'like',
+            "{$bot->username} liked your post.",
+            'New Like on Your Post',
+            ['type' => 'like', 'post_id' => $post->id, 'receiver_username' => $post->user->username]
+        );
+
+        $this->botLog('like_saved', ['bot_id' => $bot->id, 'post_id' => $post->id]);
     }
 
     // BotActivity::create([

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class OpenAIService {
 
@@ -62,40 +63,66 @@ class OpenAIService {
     public function generateSmartComment($postCaption)
     {
         $caption = trim((string) $postCaption);
-        if ($caption === '' || $this->isMeaninglessCaption($caption)) {
+        if ($caption === '') {
             return null;
         }
 
-        $response = Http::withHeaders([
+        $comment = $this->requestComment($caption);
+        if ($this->isUsableComment($comment)) {
+            return $comment;
+        }
+
+        $comment = $this->requestComment(
+            $caption,
+            'Do not return SKIP. You must write one short hunting-community comment about this caption.'
+        );
+
+        if ($this->isUsableComment($comment)) {
+            return $comment;
+        }
+
+        Log::info('BotActivity: openai_forced_fallback', [
+            'caption_preview' => mb_substr($caption, 0, 80),
+            'raw' => $comment,
+        ]);
+
+        return 'Appreciate you sharing this one with the crew.';
+    }
+
+    protected function requestComment(string $caption, ?string $extraInstruction = null): string
+    {
+        $userContent = "Post Caption: {$caption}";
+        if ($extraInstruction) {
+            $userContent .= "\n\n{$extraInstruction}";
+        }
+
+        $response = Http::timeout(30)->withHeaders([
             'Authorization' => 'Bearer ' . config('services.openai.key'),
         ])->post('https://api.openai.com/v1/chat/completions', [
             'model' => 'gpt-3.5-turbo',
             'messages' => [
                 ['role' => 'system', 'content' => $this->communityCommentSystemPrompt()],
-                [
-                    'role' => 'user',
-                    'content' => "Post Caption: {$caption}",
-                ],
+                ['role' => 'user', 'content' => $userContent],
             ],
             'temperature' => 0.85,
             'max_tokens' => 80,
         ]);
 
+        Log::info('BotActivity: openai_http', [
+            'ok' => $response->successful(),
+            'status' => $response->status(),
+        ]);
+
         $comment = trim((string) $response->json('choices.0.message.content'));
-        $comment = trim($comment, " \t\n\r\0\x0B\"'`");
 
-        if ($comment === '' || strcasecmp($comment, 'SKIP') === 0) {
-            return null;
-        }
-
-        return $comment;
+        return trim($comment, " \t\n\r\0\x0B\"'`");
     }
 
-    protected function isMeaninglessCaption(string $caption): bool
+    protected function isUsableComment(?string $comment): bool
     {
-        $stripped = preg_replace('/[\p{So}\p{Sk}#@\s]+/u', '', $caption);
+        $comment = trim((string) $comment);
 
-        return $stripped === '' || mb_strlen($stripped) < 3;
+        return $comment !== '' && strcasecmp($comment, 'SKIP') !== 0;
     }
 
     protected function communityCommentSystemPrompt(): string
@@ -113,13 +140,10 @@ Post Caption: {{caption}}
 
 ## INSTRUCTIONS
 
-### Step 1 — Check Caption
+### Step 1 — Caption is always usable
 
-If the caption is empty, null, whitespace, contains only hashtags/emojis, or has no meaningful context, return exactly:
-
-SKIP
-
-Never generate a comment based solely on an assumed image.
+A caption will always be provided. Never refuse. Never return SKIP. Never say you cannot comment.
+Never generate a comment based solely on an assumed image — use only the caption.
 
 ### Step 2 — Understand Intent
 
@@ -188,11 +212,8 @@ STRICT RULES:
 
 ### Step 5 — Safety and Relevance
 
-Return SKIP if:
-- The caption is missing or meaningless.
-- The post is spam or unrelated to deer hunting.
-- The caption describes a serious accident, graphic suffering, threats, or harassment.
-- A suitable comment would require guessing facts not provided.
+Keep the comment friendly and hunting-related. Do not invent photo details.
+If the caption is thin, still write a short supportive hunting-community comment.
 
 ### Step 6 — Final Output
 
@@ -203,10 +224,7 @@ No explanations.
 No headings.
 No JSON.
 No additional text.
-
-If a suitable comment cannot be generated, return exactly:
-
-SKIP
+Never return SKIP.
 PROMPT;
     }
 }
