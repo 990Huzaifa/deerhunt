@@ -12,13 +12,13 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        $schedule->command('app:execute-bot-activity')->everyFifteenMinutes();
+        //$schedule->command('app:execute-bot-activity')->everyFifteenMinutes();
         $schedule->command('app:track-subscription')->everyFifteenMinutes();
         // $schedule->command('app:track-premium')->everyMinute();
         $schedule->command('app:aggregate-geo-stats')
             ->everyFifteenMinutes()
             ->withoutOverlapping(14);
-        $schedule->command('app:reset-bot-daily-limit')->daily();
+        //$schedule->command('app:reset-bot-daily-limit')->daily();
         // $schedule->command('app:process-score-reminder-emails')
         //     ->everyFiveMinutes()
         //     ->withoutOverlapping(45);
