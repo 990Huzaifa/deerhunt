@@ -265,4 +265,44 @@ class BotController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+    public function updateBotActiveStatus(Request $request, $id): JsonResponse
+    {
+        try {
+            if (!$request->exists('is_active')) {
+                return response()->json(['error' => 'is_active is required'], 422);
+            }
+
+            $raw = $request->input('is_active');
+            $normalized = is_string($raw) ? strtolower(trim($raw)) : $raw;
+
+            if (in_array($normalized, [true, 1, '1', 'true', 'active'], true)) {
+                $status = 'active';
+            } elseif (in_array($normalized, [false, 0, '0', 'false', 'inactive'], true)) {
+                $status = 'inactive';
+            } else {
+                return response()->json(['error' => 'is_active must be true or false'], 422);
+            }
+
+            $bot = User::where('is_bot', true)->where('is_delete', 0)->find($id);
+            if (!$bot) {
+                return response()->json(['error' => 'Bot not found'], 404);
+            }
+
+            $bot->update(['is_active' => $status]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => $status === 'active' ? 'Bot activated successfully' : 'Bot deactivated successfully',
+                'bot' => [
+                    'id' => $bot->id,
+                    'username' => $bot->username,
+                    'full_name' => $bot->full_name,
+                    'is_active' => $bot->is_active,
+                ],
+            ]);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }

@@ -76,6 +76,7 @@ class ExecuteBotActivity extends Command
 
         $bots = User::where('is_bot', true)
             ->where('is_delete', 0)
+            ->where('is_active', 'active')
             ->whereHas('botConfig', function ($q) {
                 $q->whereRaw('total_actions_today < (daily_like_limit + daily_comment_limit)');
             })

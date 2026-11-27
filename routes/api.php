@@ -172,6 +172,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
                 Route::post('upload-bot-avatars',[BotController::class,'uploadBotAvatars']);
                 Route::get('max-bot-create',[BotController::class,'MaxBotCreate']);
                 Route::delete('delete-bot/{id}',[BotController::class,'deleteBot']);
+                Route::post('bots/{id}/active-status',[BotController::class,'updateBotActiveStatus']);
 
             });
         });
