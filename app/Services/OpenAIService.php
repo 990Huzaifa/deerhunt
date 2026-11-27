@@ -42,7 +42,7 @@ class OpenAIService {
         $response = Http::withHeaders([
             'Authorization' => 'Bearer ' . config('services.openai.key'),
         ])->post('https://api.openai.com/v1/chat/completions', [
-            'model' => 'gpt-3.5-turbo-0125',
+            'model' => $this->chatModel(),
             'messages' => [
                 ['role' => 'system', 'content' => 'You are a creative assistant that outputs unique, diverse, and realistic user profiles in JSON format.'],
                 ['role' => 'user', 'content' => $prompt],
@@ -60,38 +60,69 @@ class OpenAIService {
         ];
     }
 
-    public function generateSmartComment($postCaption)
+    /**
+     * @param  array<int, string>  $existingComments
+     */
+    public function generateSmartComment($postCaption, array $existingComments = [])
     {
         $caption = trim((string) $postCaption);
         if ($caption === '') {
             return null;
         }
 
-        $comment = $this->requestComment($caption);
-        if ($this->isUsableComment($comment)) {
+        $existingComments = $this->normalizeExistingComments($existingComments);
+
+        $comment = $this->requestComment($caption, $existingComments);
+        if ($this->isUsableUniqueComment($comment, $existingComments)) {
             return $comment;
         }
 
         $comment = $this->requestComment(
             $caption,
-            'Do not return SKIP. You must write one short hunting-community comment about this caption.'
+            $existingComments,
+            'Do not return SKIP. Write one short hunting-community comment that is clearly different from any existing comments listed above.'
         );
 
-        if ($this->isUsableComment($comment)) {
+        if ($this->isUsableUniqueComment($comment, $existingComments)) {
             return $comment;
         }
 
-        Log::info('BotActivity: openai_forced_fallback', [
+        $fallback = $this->uniqueFallbackComment($existingComments);
+        if ($fallback !== null) {
+            Log::info('BotActivity: openai_forced_fallback', [
+                'caption_preview' => mb_substr($caption, 0, 80),
+                'raw' => $comment,
+                'fallback' => $fallback,
+            ]);
+
+            return $fallback;
+        }
+
+        Log::info('BotActivity: openai_no_unique_comment', [
             'caption_preview' => mb_substr($caption, 0, 80),
             'raw' => $comment,
+            'existing_count' => count($existingComments),
         ]);
 
-        return 'Appreciate you sharing this one with the crew.';
+        return null;
     }
 
-    protected function requestComment(string $caption, ?string $extraInstruction = null): string
+    /**
+     * @param  array<int, string>  $existingComments
+     */
+    protected function requestComment(string $caption, array $existingComments = [], ?string $extraInstruction = null): string
     {
         $userContent = "Post Caption: {$caption}";
+
+        if (!empty($existingComments)) {
+            $lines = array_map(
+                fn ($c) => '- "' . str_replace('"', "'", $c) . '"',
+                array_slice($existingComments, 0, 15)
+            );
+            $userContent .= "\n\nExisting comments on this post (do NOT repeat or closely paraphrase any of these):\n"
+                . implode("\n", $lines);
+        }
+
         if ($extraInstruction) {
             $userContent .= "\n\n{$extraInstruction}";
         }
@@ -99,23 +130,33 @@ class OpenAIService {
         $response = Http::timeout(30)->withHeaders([
             'Authorization' => 'Bearer ' . config('services.openai.key'),
         ])->post('https://api.openai.com/v1/chat/completions', [
-            'model' => 'gpt-3.5-turbo',
+            'model' => $this->chatModel(),
             'messages' => [
                 ['role' => 'system', 'content' => $this->communityCommentSystemPrompt()],
                 ['role' => 'user', 'content' => $userContent],
             ],
-            'temperature' => 0.85,
+            'temperature' => 1.0,
             'max_tokens' => 80,
         ]);
 
         Log::info('BotActivity: openai_http', [
             'ok' => $response->successful(),
             'status' => $response->status(),
+            'model' => $this->chatModel(),
         ]);
+
+        if (!$response->successful()) {
+            return '';
+        }
 
         $comment = trim((string) $response->json('choices.0.message.content'));
 
         return trim($comment, " \t\n\r\0\x0B\"'`");
+    }
+
+    protected function chatModel(): string
+    {
+        return (string) (config('services.openai.model') ?: 'gpt-3.5-turbo-0125');
     }
 
     protected function isUsableComment(?string $comment): bool
@@ -123,6 +164,109 @@ class OpenAIService {
         $comment = trim((string) $comment);
 
         return $comment !== '' && strcasecmp($comment, 'SKIP') !== 0;
+    }
+
+    /**
+     * @param  array<int, string>  $existingComments
+     */
+    protected function isUsableUniqueComment(?string $comment, array $existingComments): bool
+    {
+        if (!$this->isUsableComment($comment)) {
+            return false;
+        }
+
+        return !$this->isDuplicateComment($comment, $existingComments);
+    }
+
+    /**
+     * @param  array<int, string>  $existingComments
+     */
+    public function isDuplicateComment(string $comment, array $existingComments): bool
+    {
+        $normalized = $this->normalizeComment($comment);
+        if ($normalized === '') {
+            return true;
+        }
+
+        foreach ($existingComments as $existing) {
+            $other = $this->normalizeComment($existing);
+            if ($other === '') {
+                continue;
+            }
+
+            if ($normalized === $other) {
+                return true;
+            }
+
+            similar_text($normalized, $other, $percent);
+            if ($percent >= 85) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<int, string>  $existingComments
+     */
+    protected function uniqueFallbackComment(array $existingComments): ?string
+    {
+        $fallbacks = $this->fallbackComments();
+        shuffle($fallbacks);
+
+        foreach ($fallbacks as $fallback) {
+            if (!$this->isDuplicateComment($fallback, $existingComments)) {
+                return $fallback;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function fallbackComments(): array
+    {
+        return [
+            'Appreciate you sharing this one with the crew.',
+            'Love seeing hunts like this get shared here.',
+            'That looks like a solid outing — thanks for posting it.',
+            'Always cool to see moments like this from the woods.',
+            'Respect for getting out there and putting in the work.',
+            'Great share — stories like this keep the community going.',
+            'Nice one. Hope you had a good time behind that outing.',
+            'Thanks for putting this up for everyone to see.',
+            'Looks like a memorable hunt — glad you shared it.',
+            'Solid post. Always good to catch these moments here.',
+        ];
+    }
+
+    /**
+     * @param  array<int, string>  $existingComments
+     * @return array<int, string>
+     */
+    protected function normalizeExistingComments(array $existingComments): array
+    {
+        $normalized = [];
+
+        foreach ($existingComments as $comment) {
+            $text = trim((string) $comment);
+            if ($text !== '') {
+                $normalized[] = $text;
+            }
+        }
+
+        return array_values(array_unique($normalized));
+    }
+
+    protected function normalizeComment(string $comment): string
+    {
+        $comment = mb_strtolower(trim($comment));
+        $comment = preg_replace('/\s+/u', ' ', $comment) ?? $comment;
+
+        return $comment;
     }
 
     protected function communityCommentSystemPrompt(): string
@@ -137,6 +281,8 @@ Your job is to generate ONE short, highly relevant, natural-sounding comment for
 ## INPUT
 
 Post Caption: {{caption}}
+
+Optional: a list of existing comments already on the post.
 
 ## INSTRUCTIONS
 
@@ -209,6 +355,7 @@ STRICT RULES:
 18. Do not imply the buck is alive if the caption confirms it was harvested.
 19. Avoid repeating or paraphrasing the entire caption.
 20. Make the member feel that their specific post was understood.
+21. If existing comments are provided, your comment must be clearly different in wording and angle from all of them.
 
 ### Step 5 — Safety and Relevance
 

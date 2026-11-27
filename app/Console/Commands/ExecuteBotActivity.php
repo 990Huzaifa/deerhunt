@@ -242,10 +242,27 @@ class ExecuteBotActivity extends Command
             return false;
         }
 
+        $existingComments = PostComment::where('post_id', $post->id)
+            ->whereNull('parent_id')
+            ->pluck('comment')
+            ->filter()
+            ->map(fn ($c) => trim((string) $c))
+            ->filter()
+            ->values()
+            ->all();
+
+        $this->botLog('comment_existing_loaded', [
+            'bot_id' => $bot->id,
+            'post_id' => $post->id,
+            'existing_count' => count($existingComments),
+        ]);
+
+        $aiService = new OpenAIService();
+        $commentText = '';
+
         try {
             $this->botLog('comment_ai_start', ['bot_id' => $bot->id, 'post_id' => $post->id]);
-            $aiService = new OpenAIService();
-            $commentText = trim((string) $aiService->generateSmartComment($caption));
+            $commentText = trim((string) $aiService->generateSmartComment($caption, $existingComments));
             $this->botLog('comment_ai_result', [
                 'bot_id' => $bot->id,
                 'post_id' => $post->id,
@@ -267,6 +284,29 @@ class ExecuteBotActivity extends Command
             $this->botLog('comment_ai_empty_after_generate', [
                 'bot_id' => $bot->id,
                 'post_id' => $post->id,
+            ]);
+            return false;
+        }
+
+        if ($aiService->isDuplicateComment($commentText, $existingComments)) {
+            $this->botLog('comment_duplicate_skipped', [
+                'bot_id' => $bot->id,
+                'post_id' => $post->id,
+                'comment_text' => $commentText,
+            ]);
+            return false;
+        }
+
+        // Race-safe: another bot may have saved the same text while we were generating.
+        $alreadySaved = PostComment::where('post_id', $post->id)
+            ->whereRaw('LOWER(TRIM(comment)) = ?', [mb_strtolower($commentText)])
+            ->exists();
+
+        if ($alreadySaved) {
+            $this->botLog('comment_duplicate_db_skipped', [
+                'bot_id' => $bot->id,
+                'post_id' => $post->id,
+                'comment_text' => $commentText,
             ]);
             return false;
         }
